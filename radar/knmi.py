@@ -16,6 +16,7 @@ class KnmiApiError(Exception):
 RATE_LIMIT_ERROR = "Rate Limit Exceeded"
 DEFAULT_MAX_RETRIES = 5
 DEFAULT_BACKOFF_BASE_SECONDS = 1.0
+DEFAULT_DOWNLOAD_TIMEOUT_SECONDS = 600
 
 
 @dataclass(frozen=True)
@@ -37,12 +38,14 @@ class KnmiOpenDataClient:
         *,
         max_retries: int = DEFAULT_MAX_RETRIES,
         backoff_base_seconds: float = DEFAULT_BACKOFF_BASE_SECONDS,
+        download_timeout_seconds: float = DEFAULT_DOWNLOAD_TIMEOUT_SECONDS,
     ):
         self.api_key = api_key
         self.dataset_name = dataset_name
         self.dataset_version = dataset_version
         self.max_retries = max_retries
         self.backoff_base_seconds = backoff_base_seconds
+        self.download_timeout_seconds = download_timeout_seconds
         self.session = requests.Session()
         self.session.headers.update({"Authorization": api_key})
 
@@ -140,7 +143,11 @@ class KnmiOpenDataClient:
         destination.parent.mkdir(parents=True, exist_ok=True)
         download_url = self.get_file_url(filename)
         # Presigned S3 URLs must not include the KNMI Authorization header.
-        with requests.get(download_url, stream=True, timeout=120) as response:
+        with requests.get(
+            download_url,
+            stream=True,
+            timeout=self.download_timeout_seconds,
+        ) as response:
             response.raise_for_status()
             with destination.open("wb") as handle:
                 for chunk in response.iter_content(chunk_size=8192):
@@ -151,13 +158,20 @@ class KnmiOpenDataClient:
 
 def parse_filename_issued_at(filename: str) -> datetime:
     """Parse issue time from RAD_NL25_RAC_FM_YYYYMMDDHHMM.h5 filenames."""
+    return _parse_timestamp_suffix(filename)
+
+
+def parse_ensemble_filename_issued_at(filename: str) -> datetime:
+    """Parse issue time from seamless ensemble member NetCDF filenames."""
+    return _parse_timestamp_suffix(filename)
+
+
+def _parse_timestamp_suffix(filename: str) -> datetime:
     stem = Path(filename).stem
-    parts = stem.split("_")
-    if len(parts) < 5:
+    timestamp = stem.split("_")[-1]
+    if len(timestamp) != 12 or not timestamp.isdigit():
         raise ValueError(f"Unexpected KNMI filename format: {filename}")
-    timestamp = parts[-1]
-    issued_at = datetime.strptime(timestamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
-    return issued_at
+    return datetime.strptime(timestamp, "%Y%m%d%H%M").replace(tzinfo=timezone.utc)
 
 
 def _parse_iso_datetime(value: str) -> datetime:

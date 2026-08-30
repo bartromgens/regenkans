@@ -3,6 +3,8 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export type FrameKind = 'observed' | 'forecast';
+export type OverlayMode = 'intensity' | 'probability';
+export type FrameOverlay = 'intensity' | 'probability';
 
 export interface RadarTimelineFrame {
   valid_at: string;
@@ -10,6 +12,7 @@ export interface RadarTimelineFrame {
   issued_at: string;
   lead_minutes: number;
   image_url: string;
+  overlay: FrameOverlay;
   bbox: [number, number, number, number] | null;
 }
 
@@ -19,6 +22,10 @@ export interface RadarTimelineResponse {
   frames: RadarTimelineFrame[];
 }
 
+export interface ProbabilityTimelineResponse extends RadarTimelineResponse {
+  ensemble_available: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class RadarService {
   private readonly http = inject(HttpClient);
@@ -26,6 +33,12 @@ export class RadarService {
 
   getTimeline(hours = 6): Observable<RadarTimelineResponse> {
     return this.http.get<RadarTimelineResponse>('/api/radar/timeline/', {
+      params: { hours: String(hours) },
+    });
+  }
+
+  getProbabilityTimeline(hours = 6): Observable<ProbabilityTimelineResponse> {
+    return this.http.get<ProbabilityTimelineResponse>('/api/ensemble/timeline/', {
       params: { hours: String(hours) },
     });
   }

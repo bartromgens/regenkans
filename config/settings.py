@@ -145,6 +145,9 @@ KNMI_OPEN_DATA_API_KEY = ""
 KNMI_RADAR_FORECAST_DATASET = "radar_forecast"
 KNMI_RADAR_FORECAST_VERSION = "2.0"
 KNMI_RADAR_FORECAST_DATA_DIR = BASE_DIR / "data" / "radar_forecast"
+KNMI_ENSEMBLE_FORECAST_DATASET = "seamless_precipitation_ensemble_forecast_members"
+KNMI_ENSEMBLE_FORECAST_VERSION = "1.0"
+KNMI_ENSEMBLE_FORECAST_DATA_DIR = BASE_DIR / "data" / "ensemble_forecast"
 
 try:
     from .settings_local import *  # noqa: F401 F403

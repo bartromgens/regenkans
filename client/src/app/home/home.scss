@@ -23,6 +23,43 @@
   backdrop-filter: blur(8px);
 }
 
+.mode-toggle {
+  display: inline-flex;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+  padding: 0.2rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.mode-toggle__button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  background: transparent;
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-toggle__button--active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.mode-toggle__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.timeline-hint {
+  margin-bottom: 0.65rem;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
 .timeline-state {
   display: flex;
   align-items: center;
@@ -113,6 +150,46 @@
 
 .legend-item--forecast::before {
   background: #db2777;
+}
+
+.probability-legend {
+  margin-top: 0.35rem;
+}
+
+.probability-legend__label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.probability-legend__bar {
+  height: 0.65rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 247, 188, 0.4) 0%,
+    #fee08b 25%,
+    #fdae61 50%,
+    #f46d43 75%,
+    #d73027 100%
+  );
+}
+
+.probability-legend__scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.probability-legend__note {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.72rem;
+  color: #94a3b8;
 }
 
 @media (max-width: 640px) {

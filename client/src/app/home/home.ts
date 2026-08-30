@@ -11,6 +11,8 @@ import { MatSliderModule } from '@angular/material/slider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import * as maplibregl from 'maplibre-gl';
 import {
+  OverlayMode,
+  ProbabilityTimelineResponse,
   RadarService,
   RadarTimelineFrame,
   RadarTimelineResponse,
@@ -31,8 +33,13 @@ export class Home implements OnInit, OnDestroy {
 
   private readonly radarService = inject(RadarService);
   private map: maplibregl.Map | null = null;
-  private timeline: RadarTimelineResponse | null = null;
+  private intensityFrames: RadarTimelineFrame[] = [];
+  private probabilityFrames: RadarTimelineFrame[] = [];
+  private intensityNow: string | null = null;
+  private probabilityNow: string | null = null;
   private frameLoadToken = 0;
+  private sharedBbox: [number, number, number, number] | null = null;
+  private sharedBboxOverlay: OverlayMode | null = null;
 
   readonly loading = signal(true);
   readonly timelineError = signal<string | null>(null);
@@ -41,10 +48,12 @@ export class Home implements OnInit, OnDestroy {
   readonly selectedIndex = signal(0);
   readonly nowIndex = signal(0);
   readonly currentLabel = signal('');
+  readonly mode = signal<OverlayMode>('intensity');
+  readonly ensembleAvailable = signal(false);
 
   ngOnInit(): void {
     this.initMap();
-    void this.loadTimeline();
+    void this.loadTimelines();
   }
 
   ngOnDestroy(): void {
@@ -52,7 +61,43 @@ export class Home implements OnInit, OnDestroy {
   }
 
   onSliderInput(index: number): void {
+    if (!Number.isFinite(index) || index === this.selectedIndex()) {
+      return;
+    }
     void this.selectFrame(index);
+  }
+
+  async setMode(nextMode: OverlayMode): Promise<void> {
+    if (nextMode === this.mode()) {
+      return;
+    }
+    if (nextMode === 'probability' && !this.ensembleAvailable()) {
+      return;
+    }
+
+    this.mode.set(nextMode);
+    this.sharedBbox = null;
+    this.sharedBboxOverlay = null;
+
+    const timelineFrames = nextMode === 'intensity'
+      ? this.intensityFrames
+      : this.probabilityFrames;
+    this.frames.set(timelineFrames);
+
+    if (timelineFrames.length === 0) {
+      this.timelineError.set(
+        nextMode === 'probability'
+          ? 'No ensemble forecast ingested yet.'
+          : 'No radar data ingested yet.',
+      );
+      return;
+    }
+
+    this.timelineError.set(null);
+    const now = nextMode === 'intensity' ? this.intensityNow : this.probabilityNow;
+    const nowIndex = this.resolveNowIndex(timelineFrames, now);
+    this.nowIndex.set(nowIndex);
+    await this.selectFrame(nowIndex);
   }
 
   formatValidAt(value: string): string {
@@ -77,19 +122,33 @@ export class Home implements OnInit, OnDestroy {
     this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
   }
 
-  private async loadTimeline(): Promise<void> {
+  private async loadTimelines(): Promise<void> {
     this.loading.set(true);
     this.timelineError.set(null);
 
     try {
-      this.timeline = await new Promise<RadarTimelineResponse>((resolve, reject) => {
+      const intensityTimeline = await new Promise<RadarTimelineResponse>((resolve, reject) => {
         this.radarService.getTimeline().subscribe({
           next: resolve,
           error: reject,
         });
       });
+      const probabilityTimeline = await new Promise<ProbabilityTimelineResponse>(
+        (resolve, reject) => {
+          this.radarService.getProbabilityTimeline().subscribe({
+            next: resolve,
+            error: reject,
+          });
+        },
+      );
 
-      const timelineFrames = this.timeline.frames;
+      this.intensityFrames = intensityTimeline.frames;
+      this.probabilityFrames = probabilityTimeline.frames;
+      this.intensityNow = intensityTimeline.now;
+      this.probabilityNow = probabilityTimeline.now;
+      this.ensembleAvailable.set(probabilityTimeline.ensemble_available);
+
+      const timelineFrames = this.intensityFrames;
       this.frames.set(timelineFrames);
 
       if (timelineFrames.length === 0) {
@@ -97,7 +156,7 @@ export class Home implements OnInit, OnDestroy {
         return;
       }
 
-      const nowIndex = this.resolveNowIndex(timelineFrames, this.timeline.now);
+      const nowIndex = this.resolveNowIndex(timelineFrames, this.intensityNow);
       this.nowIndex.set(nowIndex);
       await this.selectFrame(nowIndex);
     } catch {
@@ -148,16 +207,22 @@ export class Home implements OnInit, OnDestroy {
     await this.waitForMapReady();
 
     this.currentLabel.set(this.formatValidAt(frame.valid_at));
-    this.prefetchAdjacentFrames(index, timelineFrames);
+    this.prefetchAround(index, timelineFrames);
 
     const token = ++this.frameLoadToken;
     try {
       this.frameError.set(null);
-      const bbox = await this.radarService.resolveBbox(frame);
+      const canReuseBbox =
+        this.sharedBbox !== null && this.sharedBboxOverlay === frame.overlay;
+      const bbox = canReuseBbox
+        ? this.sharedBbox!
+        : frame.bbox ?? await this.radarService.resolveBbox(frame);
       if (token !== this.frameLoadToken) {
         return;
       }
 
+      this.sharedBbox = bbox;
+      this.sharedBboxOverlay = frame.overlay;
       this.updateOverlay(frame.image_url, bbox);
     } catch {
       if (token === this.frameLoadToken) {
@@ -166,16 +231,15 @@ export class Home implements OnInit, OnDestroy {
     }
   }
 
-  private prefetchAdjacentFrames(
+  private prefetchAround(
     index: number,
     timelineFrames: RadarTimelineFrame[],
   ): void {
-    const neighbors = [timelineFrames[index - 1], timelineFrames[index + 1]].filter(
-      Boolean,
-    ) as RadarTimelineFrame[];
-
-    for (const frame of neighbors) {
-      this.radarService.prefetchFrame(frame.image_url);
+    for (let offset = -3; offset <= 3; offset++) {
+      const neighbor = timelineFrames[index + offset];
+      if (neighbor && offset !== 0) {
+        this.radarService.prefetchFrame(neighbor.image_url);
+      }
     }
   }
 
