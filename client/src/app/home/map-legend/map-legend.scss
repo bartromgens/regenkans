@@ -27,7 +27,7 @@
   display: flex;
   align-items: stretch;
   gap: 0.35rem;
-  height: 3.5rem;
+  height: 5rem;
 }
 
 .intensity-legend__bar {
@@ -99,7 +99,7 @@
 
 .probability-legend__bar {
   width: 0.45rem;
-  height: 3.5rem;
+  height: 5rem;
   border-radius: 999px;
   background: linear-gradient(
     180deg,
