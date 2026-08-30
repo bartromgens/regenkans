@@ -32,20 +32,34 @@
       <div class="timeline-frame-error">{{ frameError() }}</div>
     }
 
-    <mat-slider
-      class="timeline-slider"
-      [min]="0"
-      [max]="frames().length - 1"
-      [step]="1"
-      [discrete]="true"
-      [showTickMarks]="true"
-      [displayWith]="displayWith"
-    >
-      <input
-        matSliderThumb
-        [value]="selectedIndex()"
-        (input)="onSliderInput(+$any($event.target).value)"
-      />
-    </mat-slider>
+    <div class="timeline-slider-wrap">
+      <mat-slider
+        class="timeline-slider"
+        [min]="0"
+        [max]="frames().length - 1"
+        [step]="1"
+        [discrete]="true"
+        [showTickMarks]="true"
+        [displayWith]="displayWith"
+      >
+        <input
+          matSliderThumb
+          [value]="selectedIndex()"
+          (input)="onSliderInput(+$any($event.target).value)"
+        />
+      </mat-slider>
+
+      @if (nowMark(); as mark) {
+        <div
+          class="timeline-now-mark"
+          [attr.data-edge]="mark.edge"
+          [style.left]="mark.offset"
+          aria-hidden="true"
+        >
+          <span class="timeline-now-mark__line"></span>
+          <span class="timeline-now-mark__label">Now</span>
+        </div>
+      }
+    </div>
   }
 </div>

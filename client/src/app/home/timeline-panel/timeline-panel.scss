@@ -66,6 +66,11 @@
   color: #b42318;
 }
 
+.timeline-slider-wrap {
+  position: relative;
+  padding-bottom: 0.7rem;
+}
+
 .timeline-slider {
   width: 100%;
   --mat-slider-active-track-height: 3px;
@@ -79,6 +84,49 @@
   --mat-slider-value-indicator-text-transform: none;
   --mat-slider-value-indicator-container-transform: translateX(-50%) translateY(-6px);
   --mat-slider-value-indicator-transform-origin: bottom;
+}
+
+.timeline-now-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0.7rem;
+  width: 0;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.timeline-now-mark__line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 2px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border-radius: 1px;
+  background: #1d4ed8;
+}
+
+.timeline-now-mark__label {
+  position: absolute;
+  top: calc(100% - 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #1d4ed8;
+}
+
+.timeline-now-mark[data-edge='start'] .timeline-now-mark__label {
+  left: 0;
+  transform: none;
+}
+
+.timeline-now-mark[data-edge='end'] .timeline-now-mark__label {
+  left: auto;
+  right: 0;
+  transform: none;
 }
 
 @media (max-width: 640px) {

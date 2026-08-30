@@ -1,4 +1,4 @@
-import { Component, input, output } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
 import { MatSliderModule } from '@angular/material/slider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RadarTimelineFrame } from '../../radar/radar.service';
@@ -19,6 +19,22 @@ export class TimelinePanel {
   readonly currentLabel = input('');
 
   readonly indexChange = output<number>();
+
+  readonly nowMark = computed(() => {
+    const frames = this.frames();
+    const nowIndex = this.nowIndex();
+    const last = frames.length - 1;
+    if (frames.length === 0 || nowIndex < 0 || nowIndex > last) {
+      return null;
+    }
+
+    const ratio = last === 0 ? 0 : nowIndex / last;
+    const tickOffsetPx = 3;
+    return {
+      offset: `calc(${tickOffsetPx}px + ${ratio} * (100% - ${tickOffsetPx * 2}px))`,
+      edge: ratio < 0.06 ? 'start' : ratio > 0.94 ? 'end' : 'center',
+    };
+  });
 
   readonly displayWith = (index: number): string => {
     const frame = this.frames()[index];
