@@ -1,99 +1,24 @@
 <div class="map-layout">
-  <div #mapContainer class="map-container"></div>
+  <app-radar-map [overlay]="overlay()" />
 
-  <div class="timeline-panel">
-    @if (loading()) {
-      <div class="timeline-state">
-        <mat-spinner diameter="28"></mat-spinner>
-        <span>Loading radar timeline…</span>
-      </div>
-    } @else if (timelineError()) {
-      <div class="timeline-state timeline-state--error">
-        <span>{{ timelineError() }}</span>
-      </div>
-    } @else {
-      <div class="mode-toggle">
-        <button
-          type="button"
-          class="mode-toggle__button"
-          [class.mode-toggle__button--active]="mode() === 'intensity'"
-          (click)="setMode('intensity')"
-        >
-          Intensity
-        </button>
-        <button
-          type="button"
-          class="mode-toggle__button"
-          [class.mode-toggle__button--active]="mode() === 'probability'"
-          [disabled]="!ensembleAvailable()"
-          (click)="setMode('probability')"
-        >
-          Probability
-        </button>
-      </div>
+  @if (!loading() && !timelineError()) {
+    <app-mode-toggle
+      [mode]="mode()"
+      [ensembleAvailable]="ensembleAvailable()"
+      (modeChange)="setMode($event)"
+    />
 
-      @if (!ensembleAvailable()) {
-        <div class="timeline-hint">
-          Probability view requires an ingested ensemble forecast.
-        </div>
-      }
+    <app-map-legend [mode]="mode()" />
+  }
 
-      <div class="timeline-header">
-        <span class="timeline-label">{{ currentLabel() }}</span>
-        <span
-          class="timeline-kind"
-          [class.timeline-kind--forecast]="
-            frames()[selectedIndex()]?.kind === 'forecast'
-          "
-          [class.timeline-kind--now]="selectedIndex() === nowIndex()"
-        >
-          @if (selectedIndex() === nowIndex()) {
-            Now
-          } @else if (frames()[selectedIndex()]?.kind === 'forecast') {
-            Forecast
-          } @else {
-            Past
-          }
-        </span>
-      </div>
-
-      @if (frameError()) {
-        <div class="timeline-frame-error">{{ frameError() }}</div>
-      }
-
-      <mat-slider
-        class="timeline-slider"
-        [min]="0"
-        [max]="frames().length - 1"
-        [step]="1"
-        [discrete]="true"
-        [showTickMarks]="true"
-      >
-        <input
-          matSliderThumb
-          [value]="selectedIndex()"
-          (input)="onSliderInput(+$any($event.target).value)"
-        />
-      </mat-slider>
-
-      @if (mode() === 'intensity') {
-        <div class="timeline-legend">
-          <span class="legend-item legend-item--past">Past (+0)</span>
-          <span class="legend-item legend-item--now">Now</span>
-          <span class="legend-item legend-item--forecast">Forecast</span>
-        </div>
-      } @else {
-        <div class="probability-legend">
-          <span class="probability-legend__label">Rain probability</span>
-          <div class="probability-legend__bar"></div>
-          <div class="probability-legend__scale">
-            <span>5%</span>
-            <span>50%</span>
-            <span>100%</span>
-          </div>
-          <span class="probability-legend__note">Past frames still show intensity.</span>
-        </div>
-      }
-    }
-  </div>
+  <app-timeline-panel
+    [loading]="loading()"
+    [timelineError]="timelineError()"
+    [frameError]="frameError()"
+    [frames]="frames()"
+    [selectedIndex]="selectedIndex()"
+    [nowIndex]="nowIndex()"
+    [currentLabel]="currentLabel()"
+    (indexChange)="onSliderInput($event)"
+  />
 </div>

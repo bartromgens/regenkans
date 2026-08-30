@@ -1,0 +1,68 @@
+.mode-toggle-overlay {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: calc(100% - 6rem);
+  pointer-events: none;
+}
+
+.mode-toggle {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.15rem;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.94);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.mode-toggle__button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  background: transparent;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-toggle__button--active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.mode-toggle__button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.mode-toggle-hint {
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 0.65rem;
+  color: #64748b;
+  text-align: center;
+  pointer-events: auto;
+}
+
+@media (max-width: 640px) {
+  .mode-toggle-overlay {
+    top: 0.5rem;
+    max-width: calc(100% - 4rem);
+  }
+
+  .mode-toggle__button {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.68rem;
+  }
+}

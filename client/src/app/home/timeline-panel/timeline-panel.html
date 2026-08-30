@@ -1,0 +1,50 @@
+<div class="timeline-panel">
+  @if (loading()) {
+    <div class="timeline-state">
+      <mat-spinner diameter="24"></mat-spinner>
+      <span>Loading radar timeline…</span>
+    </div>
+  } @else if (timelineError()) {
+    <div class="timeline-state timeline-state--error">
+      <span>{{ timelineError() }}</span>
+    </div>
+  } @else {
+    <div class="timeline-header">
+      <span class="timeline-label">{{ currentLabel() }}</span>
+      <span
+        class="timeline-kind"
+        [class.timeline-kind--forecast]="
+          frames()[selectedIndex()]?.kind === 'forecast'
+        "
+        [class.timeline-kind--now]="selectedIndex() === nowIndex()"
+      >
+        @if (selectedIndex() === nowIndex()) {
+          Now
+        } @else if (frames()[selectedIndex()]?.kind === 'forecast') {
+          Forecast
+        } @else {
+          Past
+        }
+      </span>
+    </div>
+
+    @if (frameError()) {
+      <div class="timeline-frame-error">{{ frameError() }}</div>
+    }
+
+    <mat-slider
+      class="timeline-slider"
+      [min]="0"
+      [max]="frames().length - 1"
+      [step]="1"
+      [discrete]="true"
+      [showTickMarks]="true"
+    >
+      <input
+        matSliderThumb
+        [value]="selectedIndex()"
+        (input)="onSliderInput(+$any($event.target).value)"
+      />
+    </mat-slider>
+  }
+</div>

@@ -1,0 +1,28 @@
+<div class="map-legend">
+  @if (mode() === 'intensity') {
+    <div class="intensity-legend">
+      <span class="intensity-legend__label">Rain intensity (mm/h)</span>
+      <div class="intensity-legend__body">
+        <div class="intensity-legend__bar"></div>
+        <div class="intensity-legend__scale">
+          <span class="intensity-legend__tick intensity-legend__tick--max">50</span>
+          <span class="intensity-legend__tick intensity-legend__tick--10">10</span>
+          <span class="intensity-legend__tick intensity-legend__tick--2">2</span>
+          <span class="intensity-legend__tick intensity-legend__tick--min">0.1</span>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="probability-legend">
+      <span class="probability-legend__label">Rain probability</span>
+      <div class="probability-legend__body">
+        <div class="probability-legend__bar"></div>
+        <div class="probability-legend__scale">
+          <span>100%</span>
+          <span>50%</span>
+          <span>5%</span>
+        </div>
+      </div>
+    </div>
+  }
+</div>

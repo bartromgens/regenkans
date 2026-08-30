@@ -1,0 +1,123 @@
+import {
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  effect,
+  input,
+} from '@angular/core';
+import * as maplibregl from 'maplibre-gl';
+
+const OVERLAY_SOURCE_ID = 'radar-overlay';
+const OVERLAY_LAYER_ID = 'radar-overlay-layer';
+
+export interface RadarOverlay {
+  imageUrl: string;
+  bbox: [number, number, number, number];
+}
+
+@Component({
+  selector: 'app-radar-map',
+  styleUrl: './radar-map.scss',
+  templateUrl: './radar-map.html',
+})
+export class RadarMap implements OnInit, OnDestroy {
+  @ViewChild('mapContainer', { static: true })
+  mapContainer!: ElementRef<HTMLDivElement>;
+
+  readonly overlay = input<RadarOverlay | null>(null);
+
+  private map: maplibregl.Map | null = null;
+
+  constructor() {
+    effect(() => {
+      const overlay = this.overlay();
+      if (overlay) {
+        void this.applyOverlay(overlay);
+      }
+    });
+  }
+
+  ngOnInit(): void {
+    this.initMap();
+  }
+
+  ngOnDestroy(): void {
+    this.map?.remove();
+  }
+
+  private initMap(): void {
+    this.map = new maplibregl.Map({
+      container: this.mapContainer.nativeElement,
+      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      center: [5.3, 52.2],
+      zoom: 7,
+    });
+
+    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+  }
+
+  private async applyOverlay(overlay: RadarOverlay): Promise<void> {
+    await this.waitForMapReady();
+    this.updateOverlay(overlay.imageUrl, overlay.bbox);
+  }
+
+  private updateOverlay(
+    imageUrl: string,
+    bbox: [number, number, number, number],
+  ): void {
+    if (!this.map) {
+      return;
+    }
+
+    const [west, south, east, north] = bbox;
+    const coordinates: [
+      [number, number],
+      [number, number],
+      [number, number],
+      [number, number],
+    ] = [
+      [west, north],
+      [east, north],
+      [east, south],
+      [west, south],
+    ];
+
+    const existingSource = this.map.getSource(OVERLAY_SOURCE_ID) as
+      | maplibregl.ImageSource
+      | undefined;
+
+    if (existingSource) {
+      existingSource.updateImage({ url: imageUrl, coordinates });
+      return;
+    }
+
+    this.map.addSource(OVERLAY_SOURCE_ID, {
+      type: 'image',
+      url: imageUrl,
+      coordinates,
+    });
+
+    this.map.addLayer({
+      id: OVERLAY_LAYER_ID,
+      type: 'raster',
+      source: OVERLAY_SOURCE_ID,
+      paint: {
+        'raster-opacity': 0.85,
+      },
+    });
+  }
+
+  private waitForMapReady(): Promise<void> {
+    if (!this.map) {
+      return Promise.resolve();
+    }
+    if (this.map.isStyleLoaded()) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.map?.once('load', () => resolve());
+    });
+  }
+}

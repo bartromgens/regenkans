@@ -1,15 +1,9 @@
 import {
   Component,
-  ElementRef,
-  OnDestroy,
   OnInit,
-  ViewChild,
   inject,
   signal,
 } from '@angular/core';
-import { MatSliderModule } from '@angular/material/slider';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import * as maplibregl from 'maplibre-gl';
 import {
   OverlayMode,
   ProbabilityTimelineResponse,
@@ -17,22 +11,19 @@ import {
   RadarTimelineFrame,
   RadarTimelineResponse,
 } from '../radar/radar.service';
-
-const OVERLAY_SOURCE_ID = 'radar-overlay';
-const OVERLAY_LAYER_ID = 'radar-overlay-layer';
+import { ModeToggle } from './mode-toggle/mode-toggle';
+import { MapLegend } from './map-legend/map-legend';
+import { TimelinePanel } from './timeline-panel/timeline-panel';
+import { RadarMap, RadarOverlay } from './radar-map/radar-map';
 
 @Component({
-  imports: [MatSliderModule, MatProgressSpinnerModule],
+  imports: [ModeToggle, MapLegend, TimelinePanel, RadarMap],
   selector: 'app-home',
   styleUrl: './home.scss',
   templateUrl: './home.html',
 })
-export class Home implements OnInit, OnDestroy {
-  @ViewChild('mapContainer', { static: true })
-  mapContainer!: ElementRef<HTMLDivElement>;
-
+export class Home implements OnInit {
   private readonly radarService = inject(RadarService);
-  private map: maplibregl.Map | null = null;
   private intensityFrames: RadarTimelineFrame[] = [];
   private probabilityFrames: RadarTimelineFrame[] = [];
   private intensityNow: string | null = null;
@@ -50,14 +41,10 @@ export class Home implements OnInit, OnDestroy {
   readonly currentLabel = signal('');
   readonly mode = signal<OverlayMode>('intensity');
   readonly ensembleAvailable = signal(false);
+  readonly overlay = signal<RadarOverlay | null>(null);
 
   ngOnInit(): void {
-    this.initMap();
     void this.loadTimelines();
-  }
-
-  ngOnDestroy(): void {
-    this.map?.remove();
   }
 
   onSliderInput(index: number): void {
@@ -98,28 +85,6 @@ export class Home implements OnInit, OnDestroy {
     const nowIndex = this.resolveNowIndex(timelineFrames, now);
     this.nowIndex.set(nowIndex);
     await this.selectFrame(nowIndex);
-  }
-
-  formatValidAt(value: string): string {
-    return new Intl.DateTimeFormat('nl-NL', {
-      timeZone: 'Europe/Amsterdam',
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date(value));
-  }
-
-  private initMap(): void {
-    this.map = new maplibregl.Map({
-      container: this.mapContainer.nativeElement,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      center: [5.3, 52.2],
-      zoom: 7,
-    });
-
-    this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
   }
 
   private async loadTimelines(): Promise<void> {
@@ -200,11 +165,9 @@ export class Home implements OnInit, OnDestroy {
   private async showFrame(index: number): Promise<void> {
     const timelineFrames = this.frames();
     const frame = timelineFrames[index];
-    if (!frame || !this.map) {
+    if (!frame) {
       return;
     }
-
-    await this.waitForMapReady();
 
     this.currentLabel.set(this.formatValidAt(frame.valid_at));
     this.prefetchAround(index, timelineFrames);
@@ -223,7 +186,7 @@ export class Home implements OnInit, OnDestroy {
 
       this.sharedBbox = bbox;
       this.sharedBboxOverlay = frame.overlay;
-      this.updateOverlay(frame.image_url, bbox);
+      this.overlay.set({ imageUrl: frame.image_url, bbox });
     } catch {
       if (token === this.frameLoadToken) {
         this.frameError.set('Could not load radar frame.');
@@ -243,61 +206,14 @@ export class Home implements OnInit, OnDestroy {
     }
   }
 
-  private updateOverlay(
-    imageUrl: string,
-    bbox: [number, number, number, number],
-  ): void {
-    if (!this.map) {
-      return;
-    }
-
-    const [west, south, east, north] = bbox;
-    const coordinates: [
-      [number, number],
-      [number, number],
-      [number, number],
-      [number, number],
-    ] = [
-      [west, north],
-      [east, north],
-      [east, south],
-      [west, south],
-    ];
-
-    const existingSource = this.map.getSource(OVERLAY_SOURCE_ID) as
-      | maplibregl.ImageSource
-      | undefined;
-
-    if (existingSource) {
-      existingSource.updateImage({ url: imageUrl, coordinates });
-      return;
-    }
-
-    this.map.addSource(OVERLAY_SOURCE_ID, {
-      type: 'image',
-      url: imageUrl,
-      coordinates,
-    });
-
-    this.map.addLayer({
-      id: OVERLAY_LAYER_ID,
-      type: 'raster',
-      source: OVERLAY_SOURCE_ID,
-      paint: {
-        'raster-opacity': 0.85,
-      },
-    });
-  }
-
-  private waitForMapReady(): Promise<void> {
-    if (!this.map) {
-      return Promise.resolve();
-    }
-    if (this.map.isStyleLoaded()) {
-      return Promise.resolve();
-    }
-    return new Promise((resolve) => {
-      this.map?.once('load', () => resolve());
-    });
+  private formatValidAt(value: string): string {
+    return new Intl.DateTimeFormat('nl-NL', {
+      timeZone: 'Europe/Amsterdam',
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(value));
   }
 }

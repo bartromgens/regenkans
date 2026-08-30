@@ -1,0 +1,128 @@
+.map-legend {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 2;
+  padding: 0.45rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+.intensity-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.intensity-legend__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.intensity-legend__body {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+  height: 3.5rem;
+}
+
+.intensity-legend__bar {
+  width: 0.45rem;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgb(255, 220, 0) 0%,
+    rgb(255, 80, 0) 14.7%,
+    rgb(220, 0, 80) 25.9%,
+    rgb(120, 0, 180) 37.1%,
+    rgb(0, 80, 180) 51.8%,
+    rgb(0, 120, 215) 62.9%,
+    rgb(0, 160, 246) 100%
+  );
+}
+
+.intensity-legend__scale {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  font-size: 0.58rem;
+  line-height: 1;
+  color: #64748b;
+}
+
+.intensity-legend__tick {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.intensity-legend__tick--max {
+  top: 0;
+  transform: translateY(0);
+}
+
+.intensity-legend__tick--10 {
+  top: 25.9%;
+}
+
+.intensity-legend__tick--2 {
+  top: 51.8%;
+}
+
+.intensity-legend__tick--min {
+  top: 100%;
+  transform: translateY(-100%);
+}
+
+.probability-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.probability-legend__label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.probability-legend__body {
+  display: flex;
+  align-items: stretch;
+  gap: 0.35rem;
+}
+
+.probability-legend__bar {
+  width: 0.45rem;
+  height: 3.5rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    #d73027 0%,
+    #f46d43 25%,
+    #fdae61 50%,
+    #fee08b 75%,
+    rgba(255, 247, 188, 0.4) 100%
+  );
+}
+
+.probability-legend__scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.58rem;
+  color: #64748b;
+}
+
+@media (max-width: 640px) {
+  .map-legend {
+    top: 0.5rem;
+    left: 0.5rem;
+    padding: 0.35rem 0.45rem;
+  }
+}
