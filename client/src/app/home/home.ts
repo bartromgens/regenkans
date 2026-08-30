@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   OnInit,
   inject,
   signal,
@@ -24,8 +25,9 @@ import { RadarMap, RadarOverlay } from './radar-map/radar-map';
 })
 export class Home implements OnInit {
   private readonly radarService = inject(RadarService);
-  private timelineNow: string | null = null;
+  private readonly destroyRef = inject(DestroyRef);
   private frameLoadToken = 0;
+  private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
   private sharedBbox: [number, number, number, number] | null = null;
   private sharedBboxImageUrl: string | null = null;
 
@@ -77,7 +79,6 @@ export class Home implements OnInit {
         });
       });
 
-      this.timelineNow = timeline.now;
       this.ensembleAvailable.set(timeline.ensemble_available);
       this.frames.set(timeline.frames);
 
@@ -86,8 +87,9 @@ export class Home implements OnInit {
         return;
       }
 
-      const nowIndex = this.resolveNowIndex(timeline.frames, timeline.now);
+      const nowIndex = this.resolveNowIndex(timeline.frames);
       this.nowIndex.set(nowIndex);
+      this.startNowIndexRefresh();
       await this.selectFrame(nowIndex);
     } catch {
       this.timelineError.set('Could not load radar timeline.');
@@ -96,26 +98,13 @@ export class Home implements OnInit {
     }
   }
 
-  private resolveNowIndex(
-    timelineFrames: TimelineSlot[],
-    now: string | null,
-  ): number {
-    if (!now) {
-      return timelineFrames.findIndex(
-        (slot) => slot.intensity?.lead_minutes === 0,
-      );
-    }
-
-    const nowTime = new Date(now).getTime();
+  private resolveNowIndex(timelineFrames: TimelineSlot[]): number {
+    const nowTime = Date.now();
     let bestIndex = 0;
     let bestDistance = Number.POSITIVE_INFINITY;
 
     timelineFrames.forEach((slot, index) => {
-      const intensity = slot.intensity;
-      if (!intensity || intensity.lead_minutes !== 0) {
-        return;
-      }
-      const distance = Math.abs(new Date(intensity.issued_at).getTime() - nowTime);
+      const distance = Math.abs(new Date(slot.valid_at).getTime() - nowTime);
       if (distance < bestDistance) {
         bestDistance = distance;
         bestIndex = index;
@@ -125,13 +114,42 @@ export class Home implements OnInit {
     return bestIndex;
   }
 
+  private startNowIndexRefresh(): void {
+    if (this.nowIndexIntervalId !== null) {
+      clearInterval(this.nowIndexIntervalId);
+    }
+
+    this.nowIndexIntervalId = setInterval(() => {
+      const frames = this.frames();
+      if (frames.length === 0) {
+        return;
+      }
+      this.nowIndex.set(this.resolveNowIndex(frames));
+    }, 60_000);
+
+    this.destroyRef.onDestroy(() => {
+      if (this.nowIndexIntervalId !== null) {
+        clearInterval(this.nowIndexIntervalId);
+      }
+    });
+  }
+
   private async selectFrame(index: number): Promise<void> {
     this.selectedIndex.set(index);
     await this.showFrame(index);
   }
 
   private sourceForMode(slot: TimelineSlot): FrameSource | null {
-    return this.mode() === 'intensity' ? slot.intensity : slot.probability;
+    if (this.mode() === 'intensity') {
+      return slot.intensity;
+    }
+    if (slot.probability) {
+      return slot.probability;
+    }
+    if (slot.kind === 'observed' && slot.intensity) {
+      return slot.intensity;
+    }
+    return null;
   }
 
   private unavailableMessage(mode: OverlayMode): string {
@@ -183,13 +201,12 @@ export class Home implements OnInit {
     index: number,
     timelineFrames: TimelineSlot[],
   ): void {
-    const mode = this.mode();
     for (let offset = -3; offset <= 3; offset++) {
       const neighbor = timelineFrames[index + offset];
       if (!neighbor || offset === 0) {
         continue;
       }
-      const source = mode === 'intensity' ? neighbor.intensity : neighbor.probability;
+      const source = this.sourceForMode(neighbor);
       if (source) {
         this.radarService.prefetchFrame(source.image_url);
       }
