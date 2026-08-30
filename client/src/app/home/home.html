@@ -1,0 +1,14 @@
+<mat-card>
+  <mat-card-header>
+    <mat-card-title>API Health Check</mat-card-title>
+  </mat-card-header>
+  <mat-card-content>
+    @if (loading()) {
+      <mat-spinner diameter="32"></mat-spinner>
+    } @else if (error()) {
+      <p>{{ error() }}</p>
+    } @else {
+      <p>Backend status: <strong>{{ healthStatus() }}</strong></p>
+    }
+  </mat-card-content>
+</mat-card>
