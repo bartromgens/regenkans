@@ -1,3 +1,7 @@
 DEBUG = True
 SECRET_KEY = "change-me-to-a-random-secret-key"
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+
+# KNMI Open Data API key (registered key recommended)
+# Anonymous key documented at https://developer.dataplatform.knmi.nl/open-data-api
+KNMI_OPEN_DATA_API_KEY = "your-knmi-open-data-api-key"

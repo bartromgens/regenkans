@@ -18,6 +18,7 @@ config/settings_local.py
 db.sqlite3
 media/
 staticfiles/
+data/
 
 # Node / Angular
 client/node_modules/

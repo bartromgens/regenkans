@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "api",
+    "radar",
 ]
 
 MIDDLEWARE = [
@@ -136,6 +137,14 @@ MAILERS = {
         "BACKEND": "django.core.mail.backends.console.EmailBackend",
     },
 }
+
+
+# KNMI Open Data API
+# Prefer a registered key from https://developer.dataplatform.knmi.nl/open-data-api
+KNMI_OPEN_DATA_API_KEY = ""
+KNMI_RADAR_FORECAST_DATASET = "radar_forecast"
+KNMI_RADAR_FORECAST_VERSION = "2.0"
+KNMI_RADAR_FORECAST_DATA_DIR = BASE_DIR / "data" / "radar_forecast"
 
 try:
     from .settings_local import *  # noqa: F401 F403

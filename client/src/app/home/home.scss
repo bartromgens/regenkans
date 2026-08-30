@@ -1,0 +1,133 @@
+.map-layout {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.map-container {
+  width: 100%;
+  height: 100%;
+}
+
+.timeline-panel {
+  position: absolute;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  width: min(720px, calc(100% - 2rem));
+  padding: 1rem 1.25rem 0.85rem;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.timeline-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-height: 4rem;
+  color: #334155;
+}
+
+.timeline-state--error {
+  color: #b42318;
+}
+
+.timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.timeline-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.timeline-kind {
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.timeline-kind--now {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.timeline-kind--forecast {
+  background: #fce7f3;
+  color: #be185d;
+}
+
+.timeline-frame-error {
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  color: #b42318;
+}
+
+.timeline-slider {
+  width: 100%;
+}
+
+.timeline-legend {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.legend-item::before {
+  content: '';
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+}
+
+.legend-item--past::before {
+  background: #94a3b8;
+}
+
+.legend-item--now::before {
+  background: #2563eb;
+}
+
+.legend-item--forecast::before {
+  background: #db2777;
+}
+
+@media (max-width: 640px) {
+  .timeline-panel {
+    bottom: 1rem;
+    padding-inline: 1rem;
+  }
+
+  .timeline-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .timeline-legend {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+}
