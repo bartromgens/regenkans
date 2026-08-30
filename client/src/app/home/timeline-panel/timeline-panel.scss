@@ -72,6 +72,13 @@
   --mat-slider-inactive-track-height: 3px;
   --mat-slider-handle-height: 16px;
   --mat-slider-handle-width: 16px;
+  --mat-slider-value-indicator-width: auto;
+  --mat-slider-value-indicator-height: 24px;
+  --mat-slider-value-indicator-padding: 0 8px;
+  --mat-slider-value-indicator-border-radius: 6px;
+  --mat-slider-value-indicator-text-transform: none;
+  --mat-slider-value-indicator-container-transform: translateX(-50%) translateY(-6px);
+  --mat-slider-value-indicator-transform-origin: bottom;
 }
 
 @media (max-width: 640px) {
