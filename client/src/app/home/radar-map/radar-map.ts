@@ -35,6 +35,8 @@ export class RadarMap implements OnInit, OnDestroy {
       const overlay = this.overlay();
       if (overlay) {
         void this.applyOverlay(overlay);
+      } else {
+        void this.clearOverlay();
       }
     });
   }
@@ -107,6 +109,20 @@ export class RadarMap implements OnInit, OnDestroy {
         'raster-opacity': 0.85,
       },
     });
+  }
+
+  private async clearOverlay(): Promise<void> {
+    await this.waitForMapReady();
+    if (!this.map) {
+      return;
+    }
+
+    if (this.map.getLayer(OVERLAY_LAYER_ID)) {
+      this.map.removeLayer(OVERLAY_LAYER_ID);
+    }
+    if (this.map.getSource(OVERLAY_SOURCE_ID)) {
+      this.map.removeSource(OVERLAY_SOURCE_ID);
+    }
   }
 
   private waitForMapReady(): Promise<void> {

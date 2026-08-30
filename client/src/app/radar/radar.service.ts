@@ -4,22 +4,25 @@ import { Observable } from 'rxjs';
 
 export type FrameKind = 'observed' | 'forecast';
 export type OverlayMode = 'intensity' | 'probability';
-export type FrameOverlay = 'intensity' | 'probability';
 
-export interface RadarTimelineFrame {
-  valid_at: string;
-  kind: FrameKind;
+export interface FrameSource {
   issued_at: string;
   lead_minutes: number;
   image_url: string;
-  overlay: FrameOverlay;
   bbox: [number, number, number, number] | null;
+}
+
+export interface TimelineSlot {
+  valid_at: string;
+  kind: FrameKind;
+  intensity: FrameSource | null;
+  probability: FrameSource | null;
 }
 
 export interface RadarTimelineResponse {
   generated_at: string;
   now: string | null;
-  frames: RadarTimelineFrame[];
+  frames: TimelineSlot[];
 }
 
 export interface ProbabilityTimelineResponse extends RadarTimelineResponse {
@@ -31,30 +34,30 @@ export class RadarService {
   private readonly http = inject(HttpClient);
   private readonly bboxCache = new Map<string, [number, number, number, number]>();
 
-  getTimeline(hours = 6): Observable<RadarTimelineResponse> {
+  getTimeline(hours = 24): Observable<RadarTimelineResponse> {
     return this.http.get<RadarTimelineResponse>('/api/radar/timeline/', {
       params: { hours: String(hours) },
     });
   }
 
-  getProbabilityTimeline(hours = 6): Observable<ProbabilityTimelineResponse> {
+  getProbabilityTimeline(hours = 24): Observable<ProbabilityTimelineResponse> {
     return this.http.get<ProbabilityTimelineResponse>('/api/ensemble/timeline/', {
       params: { hours: String(hours) },
     });
   }
 
-  async resolveBbox(frame: RadarTimelineFrame): Promise<[number, number, number, number]> {
-    if (frame.bbox) {
-      this.bboxCache.set(frame.image_url, frame.bbox);
-      return frame.bbox;
+  async resolveBbox(source: FrameSource): Promise<[number, number, number, number]> {
+    if (source.bbox) {
+      this.bboxCache.set(source.image_url, source.bbox);
+      return source.bbox;
     }
 
-    const cached = this.bboxCache.get(frame.image_url);
+    const cached = this.bboxCache.get(source.image_url);
     if (cached) {
       return cached;
     }
 
-    const response = await fetch(frame.image_url);
+    const response = await fetch(source.image_url);
     if (!response.ok) {
       throw new Error(`Failed to load radar frame: ${response.status}`);
     }
@@ -65,7 +68,7 @@ export class RadarService {
     }
 
     const bbox = bboxHeader.split(',').map(Number) as [number, number, number, number];
-    this.bboxCache.set(frame.image_url, bbox);
+    this.bboxCache.set(source.image_url, bbox);
     return bbox;
   }
 

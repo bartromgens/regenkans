@@ -40,7 +40,7 @@ class RadarApiTests(TestCase):
                 valid_at=issued_at + timedelta(minutes=lead),
             )
 
-        response = self.client.get(reverse("radar-timeline"), {"hours": 6})
+        response = self.client.get(reverse("radar-timeline"), {"hours": 24})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
@@ -48,6 +48,11 @@ class RadarApiTests(TestCase):
         self.assertEqual(len(payload["frames"]), 25)
         self.assertEqual(payload["frames"][0]["kind"], "observed")
         self.assertEqual(payload["frames"][-1]["kind"], "forecast")
+        self.assertIsNotNone(payload["frames"][0]["intensity"])
+        self.assertIsNone(payload["frames"][0]["probability"])
+        self.assertTrue(
+            payload["frames"][0]["intensity"]["image_url"].startswith("/api/radar/frames/")
+        )
 
     def test_frame_endpoint_renders_png(self):
         path = create_sample_radar_forecast_h5(
@@ -94,7 +99,7 @@ class EnsembleApiTests(TestCase):
             "KNMI_PYSTEPS_BLEND_ENS_202608232120.nc"
         )
 
-    def _seed_radar_and_ensemble(self):
+    def _seed_radar_and_ensemble(self, *, aligned: bool = True):
         radar_path = create_sample_radar_forecast_h5(
             self.radar_dir / "RAD_NL25_RAC_FM_202608301445.h5",
             step_count=25,
@@ -106,7 +111,11 @@ class EnsembleApiTests(TestCase):
             wet_member_count=10,
         )
         radar_issued = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
-        ensemble_issued = datetime(2026, 8, 23, 21, 20, tzinfo=timezone.utc)
+        ensemble_issued = (
+            radar_issued
+            if aligned
+            else datetime(2026, 8, 23, 21, 20, tzinfo=timezone.utc)
+        )
 
         radar = RadarForecast.objects.create(
             filename=radar_path.name,
@@ -116,12 +125,13 @@ class EnsembleApiTests(TestCase):
             rows=765,
             cols=700,
         )
-        RadarForecastStep.objects.create(
-            forecast=radar,
-            image_name="image1",
-            lead_minutes=0,
-            valid_at=radar_issued,
-        )
+        for lead in range(0, 125, 5):
+            RadarForecastStep.objects.create(
+                forecast=radar,
+                image_name=f"image{lead // 5 + 1}",
+                lead_minutes=lead,
+                valid_at=radar_issued + timedelta(minutes=lead),
+            )
 
         ensemble = EnsembleForecast.objects.create(
             filename=ensemble_path.name,
@@ -139,22 +149,39 @@ class EnsembleApiTests(TestCase):
                 valid_at=ensemble_issued + timedelta(minutes=lead),
             )
 
-        return ensemble
+        return ensemble, radar_issued
 
     def test_ensemble_timeline_endpoint_returns_mixed_frames(self):
         self._seed_radar_and_ensemble()
 
-        response = self.client.get(reverse("ensemble-timeline"), {"hours": 6})
+        response = self.client.get(reverse("ensemble-timeline"), {"hours": 24})
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["ensemble_available"])
-        self.assertEqual(payload["frames"][0]["overlay"], "intensity")
-        self.assertEqual(payload["frames"][1]["overlay"], "probability")
-        self.assertTrue(payload["frames"][1]["image_url"].startswith("/api/ensemble/frames/"))
+        self.assertIsNotNone(payload["frames"][0]["intensity"])
+        self.assertIsNone(payload["frames"][0]["probability"])
+        self.assertIsNotNone(payload["frames"][1]["intensity"])
+        self.assertIsNotNone(payload["frames"][1]["probability"])
+        self.assertTrue(
+            payload["frames"][1]["probability"]["image_url"].startswith("/api/ensemble/frames/")
+        )
+
+    def test_both_timeline_endpoints_share_valid_at_sequence(self):
+        self._seed_radar_and_ensemble()
+
+        radar_response = self.client.get(reverse("radar-timeline"), {"hours": 24})
+        ensemble_response = self.client.get(reverse("ensemble-timeline"), {"hours": 24})
+
+        radar_valid_at = [frame["valid_at"] for frame in radar_response.json()["frames"]]
+        ensemble_valid_at = [
+            frame["valid_at"] for frame in ensemble_response.json()["frames"]
+        ]
+
+        self.assertEqual(radar_valid_at, ensemble_valid_at)
 
     def test_ensemble_frame_endpoint_renders_png(self):
-        ensemble = self._seed_radar_and_ensemble()
+        ensemble, _ = self._seed_radar_and_ensemble(aligned=False)
 
         response = self.client.get(
             reverse("ensemble-frame", args=[ensemble.filename, 5]),

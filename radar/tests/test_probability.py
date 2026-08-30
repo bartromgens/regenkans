@@ -13,7 +13,7 @@ from radar.tests.fixtures import (
     create_sample_ensemble_forecast_nc,
     create_sample_radar_forecast_h5,
 )
-from radar.timeline import build_probability_timeline
+from radar.timeline import build_probability_timeline, build_unified_timeline
 
 
 @override_settings(KNMI_ENSEMBLE_FORECAST_DATA_DIR=Path("/tmp/regenkans-pop-test"))
@@ -118,7 +118,89 @@ class ProbabilityTimelineTests(TestCase):
         self.radar_dir.mkdir(parents=True, exist_ok=True)
         self.ensemble_dir.mkdir(parents=True, exist_ok=True)
 
+    def _seed_radar_and_ensemble(self):
+        radar_path = create_sample_radar_forecast_h5(
+            self.radar_dir / "RAD_NL25_RAC_FM_202608301445.h5",
+            step_count=25,
+        )
+        ensemble_path = create_sample_ensemble_forecast_nc(
+            self.ensemble_dir
+            / "seamless_precipitation_ensemble_forecast_members_1.0_"
+            "KNMI_PYSTEPS_BLEND_ENS_202608232120.nc",
+            step_count=72,
+            member_count=20,
+        )
+        radar_issued = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
+        ensemble_issued = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
+
+        radar = RadarForecast.objects.create(
+            filename=radar_path.name,
+            issued_at=radar_issued,
+            file_path=str(radar_path),
+            status=RadarForecast.Status.PARSED,
+            rows=765,
+            cols=700,
+        )
+        for lead in range(0, 125, 5):
+            RadarForecastStep.objects.create(
+                forecast=radar,
+                image_name=f"image{lead // 5 + 1}",
+                lead_minutes=lead,
+                valid_at=radar_issued + timedelta(minutes=lead),
+            )
+
+        ensemble = EnsembleForecast.objects.create(
+            filename=ensemble_path.name,
+            issued_at=ensemble_issued,
+            file_path=str(ensemble_path),
+            status=EnsembleForecast.Status.PARSED,
+            rows=10,
+            cols=12,
+            member_count=20,
+        )
+        for lead in range(5, 365, 5):
+            EnsembleForecastStep.objects.create(
+                forecast=ensemble,
+                lead_minutes=lead,
+                valid_at=ensemble_issued + timedelta(minutes=lead),
+            )
+
+        return radar_issued, ensemble_issued
+
     def test_build_probability_timeline_composes_past_intensity_and_future_pop(self):
+        radar_issued, ensemble_issued = self._seed_radar_and_ensemble()
+
+        now, slots, ensemble_available = build_probability_timeline(hours=24)
+
+        self.assertTrue(ensemble_available)
+        self.assertEqual(now, radar_issued)
+        self.assertEqual(len(slots), 73)
+        self.assertEqual(slots[0].kind, "observed")
+        self.assertIsNotNone(slots[0].intensity)
+        self.assertIsNone(slots[0].probability)
+        self.assertTrue(slots[0].intensity.image_url.startswith("/api/radar/frames/"))
+
+        first_forecast = slots[1]
+        self.assertEqual(first_forecast.kind, "forecast")
+        self.assertIsNotNone(first_forecast.intensity)
+        self.assertIsNotNone(first_forecast.probability)
+        self.assertTrue(
+            first_forecast.probability.image_url.startswith("/api/ensemble/frames/")
+        )
+
+    def test_far_future_slots_have_probability_only(self):
+        radar_issued, _ = self._seed_radar_and_ensemble()
+
+        _, slots, _ = build_unified_timeline(hours=24)
+
+        radar_max_valid_at = radar_issued + timedelta(minutes=120)
+        far_future = [slot for slot in slots if slot.valid_at > radar_max_valid_at]
+
+        self.assertTrue(far_future)
+        self.assertTrue(all(slot.intensity is None for slot in far_future))
+        self.assertTrue(all(slot.probability is not None for slot in far_future))
+
+    def test_stale_ensemble_steps_are_not_included(self):
         radar_path = create_sample_radar_forecast_h5(
             self.radar_dir / "RAD_NL25_RAC_FM_202608301445.h5",
             step_count=25,
@@ -165,12 +247,7 @@ class ProbabilityTimelineTests(TestCase):
                 valid_at=ensemble_issued + timedelta(minutes=lead),
             )
 
-        now, frames, ensemble_available = build_probability_timeline(hours=6)
+        _, slots, _ = build_unified_timeline(hours=24)
 
-        self.assertTrue(ensemble_available)
-        self.assertEqual(now, radar_issued)
-        self.assertEqual(len(frames), 73)
-        self.assertEqual(frames[0].overlay, "intensity")
-        self.assertEqual(frames[1].overlay, "probability")
-        self.assertTrue(frames[0].image_url.startswith("/api/radar/frames/"))
-        self.assertTrue(frames[1].image_url.startswith("/api/ensemble/frames/"))
+        self.assertTrue(all(slot.valid_at >= radar_issued for slot in slots if slot.kind == "forecast"))
+        self.assertTrue(all(slot.probability is None for slot in slots))

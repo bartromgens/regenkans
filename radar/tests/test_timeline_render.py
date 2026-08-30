@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from radar.models import RadarForecast, RadarForecastStep
 from radar.render import render_forecast_frame
 from radar.tests.fixtures import create_sample_radar_forecast_h5
-from radar.timeline import build_timeline
+from radar.timeline import build_timeline, build_unified_timeline
 
 
 @override_settings(KNMI_RADAR_FORECAST_DATA_DIR=Path("/tmp/regenkans-timeline-test"))
@@ -49,14 +49,22 @@ class TimelineTests(TestCase):
                     valid_at=issued_at + timedelta(minutes=lead),
                 )
 
-        now, frames = build_timeline(hours=6)
+        now, slots = build_timeline(hours=24)
 
         self.assertEqual(now, datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc))
-        self.assertEqual(len(frames), 26)
-        self.assertEqual(sum(1 for frame in frames if frame.kind == "observed"), 2)
-        self.assertEqual(sum(1 for frame in frames if frame.kind == "forecast"), 24)
-        self.assertTrue(all(frame.lead_minutes == 0 for frame in frames[:2]))
-        self.assertTrue(all(frame.lead_minutes > 0 for frame in frames[2:]))
+        self.assertEqual(len(slots), 26)
+        self.assertEqual(sum(1 for slot in slots if slot.kind == "observed"), 2)
+        self.assertEqual(sum(1 for slot in slots if slot.kind == "forecast"), 24)
+        self.assertTrue(
+            all(slot.intensity and slot.intensity.lead_minutes == 0 for slot in slots[:2])
+        )
+        self.assertTrue(
+            all(
+                slot.intensity and slot.intensity.lead_minutes > 0
+                for slot in slots[2:]
+            )
+        )
+        self.assertTrue(all(slot.probability is None for slot in slots))
 
 
 @override_settings(KNMI_RADAR_FORECAST_DATA_DIR=Path("/tmp/regenkans-render-test"))

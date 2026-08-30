@@ -5,11 +5,11 @@ import {
   signal,
 } from '@angular/core';
 import {
+  FrameSource,
   OverlayMode,
   ProbabilityTimelineResponse,
   RadarService,
-  RadarTimelineFrame,
-  RadarTimelineResponse,
+  TimelineSlot,
 } from '../radar/radar.service';
 import { ModeToggle } from './mode-toggle/mode-toggle';
 import { MapLegend } from './map-legend/map-legend';
@@ -24,18 +24,15 @@ import { RadarMap, RadarOverlay } from './radar-map/radar-map';
 })
 export class Home implements OnInit {
   private readonly radarService = inject(RadarService);
-  private intensityFrames: RadarTimelineFrame[] = [];
-  private probabilityFrames: RadarTimelineFrame[] = [];
-  private intensityNow: string | null = null;
-  private probabilityNow: string | null = null;
+  private timelineNow: string | null = null;
   private frameLoadToken = 0;
   private sharedBbox: [number, number, number, number] | null = null;
-  private sharedBboxOverlay: OverlayMode | null = null;
+  private sharedBboxImageUrl: string | null = null;
 
   readonly loading = signal(true);
   readonly timelineError = signal<string | null>(null);
   readonly frameError = signal<string | null>(null);
-  readonly frames = signal<RadarTimelineFrame[]>([]);
+  readonly frames = signal<TimelineSlot[]>([]);
   readonly selectedIndex = signal(0);
   readonly nowIndex = signal(0);
   readonly currentLabel = signal('');
@@ -44,7 +41,7 @@ export class Home implements OnInit {
   readonly overlay = signal<RadarOverlay | null>(null);
 
   ngOnInit(): void {
-    void this.loadTimelines();
+    void this.loadTimeline();
   }
 
   onSliderInput(index: number): void {
@@ -64,64 +61,32 @@ export class Home implements OnInit {
 
     this.mode.set(nextMode);
     this.sharedBbox = null;
-    this.sharedBboxOverlay = null;
-
-    const timelineFrames = nextMode === 'intensity'
-      ? this.intensityFrames
-      : this.probabilityFrames;
-    this.frames.set(timelineFrames);
-
-    if (timelineFrames.length === 0) {
-      this.timelineError.set(
-        nextMode === 'probability'
-          ? 'No ensemble forecast ingested yet.'
-          : 'No radar data ingested yet.',
-      );
-      return;
-    }
-
-    this.timelineError.set(null);
-    const now = nextMode === 'intensity' ? this.intensityNow : this.probabilityNow;
-    const nowIndex = this.resolveNowIndex(timelineFrames, now);
-    this.nowIndex.set(nowIndex);
-    await this.selectFrame(nowIndex);
+    this.sharedBboxImageUrl = null;
+    await this.showFrame(this.selectedIndex());
   }
 
-  private async loadTimelines(): Promise<void> {
+  private async loadTimeline(): Promise<void> {
     this.loading.set(true);
     this.timelineError.set(null);
 
     try {
-      const intensityTimeline = await new Promise<RadarTimelineResponse>((resolve, reject) => {
-        this.radarService.getTimeline().subscribe({
+      const timeline = await new Promise<ProbabilityTimelineResponse>((resolve, reject) => {
+        this.radarService.getProbabilityTimeline().subscribe({
           next: resolve,
           error: reject,
         });
       });
-      const probabilityTimeline = await new Promise<ProbabilityTimelineResponse>(
-        (resolve, reject) => {
-          this.radarService.getProbabilityTimeline().subscribe({
-            next: resolve,
-            error: reject,
-          });
-        },
-      );
 
-      this.intensityFrames = intensityTimeline.frames;
-      this.probabilityFrames = probabilityTimeline.frames;
-      this.intensityNow = intensityTimeline.now;
-      this.probabilityNow = probabilityTimeline.now;
-      this.ensembleAvailable.set(probabilityTimeline.ensemble_available);
+      this.timelineNow = timeline.now;
+      this.ensembleAvailable.set(timeline.ensemble_available);
+      this.frames.set(timeline.frames);
 
-      const timelineFrames = this.intensityFrames;
-      this.frames.set(timelineFrames);
-
-      if (timelineFrames.length === 0) {
+      if (timeline.frames.length === 0) {
         this.timelineError.set('No radar data ingested yet.');
         return;
       }
 
-      const nowIndex = this.resolveNowIndex(timelineFrames, this.intensityNow);
+      const nowIndex = this.resolveNowIndex(timeline.frames, timeline.now);
       this.nowIndex.set(nowIndex);
       await this.selectFrame(nowIndex);
     } catch {
@@ -132,22 +97,25 @@ export class Home implements OnInit {
   }
 
   private resolveNowIndex(
-    timelineFrames: RadarTimelineFrame[],
+    timelineFrames: TimelineSlot[],
     now: string | null,
   ): number {
     if (!now) {
-      return timelineFrames.findIndex((frame) => frame.lead_minutes === 0);
+      return timelineFrames.findIndex(
+        (slot) => slot.intensity?.lead_minutes === 0,
+      );
     }
 
     const nowTime = new Date(now).getTime();
     let bestIndex = 0;
     let bestDistance = Number.POSITIVE_INFINITY;
 
-    timelineFrames.forEach((frame, index) => {
-      if (frame.lead_minutes !== 0) {
+    timelineFrames.forEach((slot, index) => {
+      const intensity = slot.intensity;
+      if (!intensity || intensity.lead_minutes !== 0) {
         return;
       }
-      const distance = Math.abs(new Date(frame.issued_at).getTime() - nowTime);
+      const distance = Math.abs(new Date(intensity.issued_at).getTime() - nowTime);
       if (distance < bestDistance) {
         bestDistance = distance;
         bestIndex = index;
@@ -162,31 +130,48 @@ export class Home implements OnInit {
     await this.showFrame(index);
   }
 
+  private sourceForMode(slot: TimelineSlot): FrameSource | null {
+    return this.mode() === 'intensity' ? slot.intensity : slot.probability;
+  }
+
+  private unavailableMessage(mode: OverlayMode): string {
+    return mode === 'intensity'
+      ? 'Intensity not available for this time.'
+      : 'Probability not available for this time.';
+  }
+
   private async showFrame(index: number): Promise<void> {
     const timelineFrames = this.frames();
-    const frame = timelineFrames[index];
-    if (!frame) {
+    const slot = timelineFrames[index];
+    if (!slot) {
       return;
     }
 
-    this.currentLabel.set(this.formatValidAt(frame.valid_at));
+    this.currentLabel.set(this.formatValidAt(slot.valid_at));
     this.prefetchAround(index, timelineFrames);
+
+    const source = this.sourceForMode(slot);
+    if (!source) {
+      this.frameError.set(this.unavailableMessage(this.mode()));
+      this.overlay.set(null);
+      return;
+    }
 
     const token = ++this.frameLoadToken;
     try {
       this.frameError.set(null);
       const canReuseBbox =
-        this.sharedBbox !== null && this.sharedBboxOverlay === frame.overlay;
+        this.sharedBbox !== null && this.sharedBboxImageUrl === source.image_url;
       const bbox = canReuseBbox
         ? this.sharedBbox!
-        : frame.bbox ?? await this.radarService.resolveBbox(frame);
+        : source.bbox ?? await this.radarService.resolveBbox(source);
       if (token !== this.frameLoadToken) {
         return;
       }
 
       this.sharedBbox = bbox;
-      this.sharedBboxOverlay = frame.overlay;
-      this.overlay.set({ imageUrl: frame.image_url, bbox });
+      this.sharedBboxImageUrl = source.image_url;
+      this.overlay.set({ imageUrl: source.image_url, bbox });
     } catch {
       if (token === this.frameLoadToken) {
         this.frameError.set('Could not load radar frame.');
@@ -196,12 +181,17 @@ export class Home implements OnInit {
 
   private prefetchAround(
     index: number,
-    timelineFrames: RadarTimelineFrame[],
+    timelineFrames: TimelineSlot[],
   ): void {
+    const mode = this.mode();
     for (let offset = -3; offset <= 3; offset++) {
       const neighbor = timelineFrames[index + offset];
-      if (neighbor && offset !== 0) {
-        this.radarService.prefetchFrame(neighbor.image_url);
+      if (!neighbor || offset === 0) {
+        continue;
+      }
+      const source = mode === 'intensity' ? neighbor.intensity : neighbor.probability;
+      if (source) {
+        this.radarService.prefetchFrame(source.image_url);
       }
     }
   }

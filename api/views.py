@@ -16,13 +16,13 @@ def health_check(request):
 
 @api_view(["GET"])
 def radar_timeline(request):
-    hours = int(request.query_params.get("hours", 6))
+    hours = int(request.query_params.get("hours", 24))
     return Response(serialize_timeline(hours=hours))
 
 
 @api_view(["GET"])
 def ensemble_timeline(request):
-    hours = int(request.query_params.get("hours", 6))
+    hours = int(request.query_params.get("hours", 24))
     return Response(serialize_probability_timeline(hours=hours))
 
 
