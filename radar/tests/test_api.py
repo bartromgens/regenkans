@@ -220,3 +220,120 @@ class EnsembleApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/png")
         self.assertIn("X-Radar-BBox", response)
+
+
+@override_settings(
+    KNMI_RADAR_FORECAST_DATA_DIR=Path("/tmp/regenkans-point-radar"),
+    KNMI_ENSEMBLE_FORECAST_DATA_DIR=Path("/tmp/regenkans-point-ensemble"),
+)
+class RadarPointApiTests(TestCase):
+    WET_LAT = 52.1115
+    WET_LNG = 6.153931818181818
+
+    def setUp(self):
+        self.radar_dir = Path("/tmp/regenkans-point-radar")
+        self.ensemble_dir = Path("/tmp/regenkans-point-ensemble")
+        self.radar_dir.mkdir(parents=True, exist_ok=True)
+        self.ensemble_dir.mkdir(parents=True, exist_ok=True)
+
+    def _seed_timeline_data(self):
+        radar_path = create_sample_radar_forecast_h5(
+            self.radar_dir / "RAD_NL25_RAC_FM_202608301445.h5",
+            step_count=25,
+        )
+        ensemble_path = create_live_ensemble_forecast_nc(
+            self.ensemble_dir / "KNMI_PYSTEPS_BLEND_ENS_202608301445.nc",
+            step_count=72,
+            member_count=20,
+            wet_member_count=10,
+            issued_at=datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc),
+        )
+        radar_issued = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
+
+        radar = RadarForecast.objects.create(
+            filename=radar_path.name,
+            issued_at=radar_issued,
+            file_path=str(radar_path),
+            status=RadarForecast.Status.PARSED,
+            rows=765,
+            cols=700,
+        )
+        for lead in range(0, 125, 5):
+            RadarForecastStep.objects.create(
+                forecast=radar,
+                image_name=f"image{lead // 5 + 1}",
+                lead_minutes=lead,
+                valid_at=radar_issued + timedelta(minutes=lead),
+            )
+
+        ensemble = EnsembleForecast.objects.create(
+            filename=ensemble_path.name,
+            issued_at=radar_issued,
+            file_path=str(ensemble_path),
+            status=EnsembleForecast.Status.PARSED,
+            rows=10,
+            cols=12,
+            member_count=20,
+        )
+        for lead in range(5, 365, 5):
+            EnsembleForecastStep.objects.create(
+                forecast=ensemble,
+                lead_minutes=lead,
+                valid_at=radar_issued + timedelta(minutes=lead),
+            )
+
+        return radar_issued
+
+    def test_point_endpoint_returns_time_series(self):
+        radar_issued = self._seed_timeline_data()
+
+        response = self.client.get(
+            reverse("radar-point"),
+            {"lat": self.WET_LAT, "lng": self.WET_LNG, "hours": 24},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["lat"], self.WET_LAT)
+        self.assertEqual(payload["lng"], self.WET_LNG)
+        self.assertEqual(payload["now"], radar_issued.isoformat())
+        self.assertGreater(len(payload["points"]), 1)
+
+        observed = payload["points"][0]
+        self.assertEqual(observed["kind"], "observed")
+        self.assertEqual(observed["intensity"], 0.0)
+        self.assertIsNone(observed["probability"])
+        self.assertIsNone(observed["expected"])
+
+        forecast = next(point for point in payload["points"] if point["kind"] == "forecast")
+        self.assertAlmostEqual(forecast["probability"], 0.5)
+        self.assertEqual(forecast["expected"], 0.0)
+
+    def test_point_endpoint_validates_coordinates(self):
+        response = self.client.get(reverse("radar-point"))
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.get(
+            reverse("radar-point"),
+            {"lat": 100, "lng": 0},
+        )
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.get(
+            reverse("radar-point"),
+            {"lat": 0, "lng": 200},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_point_endpoint_returns_nulls_outside_grid(self):
+        self._seed_timeline_data()
+
+        response = self.client.get(
+            reverse("radar-point"),
+            {"lat": -10.0, "lng": -10.0, "hours": 24},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertTrue(all(point["intensity"] is None for point in payload["points"]))
+        self.assertTrue(all(point["probability"] is None for point in payload["points"]))

@@ -39,6 +39,26 @@ KNMI_PROJ4_METERS = (
     "+a=6378140 +b=6356750 +x_0=0 +y_0=0 +units=m"
 )
 
+# Real KNMI radar composites store 16-bit pixel values (`image_bytes_per_pixel: 2`)
+# with dedicated "missing"/"out of image" sentinels given by each image's own
+# `calibration_missing_data` / `calibration_out_of_image` attributes (observed as
+# 65534 / 65535). Legitimate heavy-rain pixel values regularly exceed 255 (e.g. a
+# raw value of 417 is a valid ~50 mm/h), so 255 is *not* a safe no-data cutoff.
+DEFAULT_NODATA_THRESHOLD = 65534.0
+
+
+def _read_nodata_threshold(image_group) -> float:
+    calibration = image_group.get("calibration")
+    if calibration is None:
+        return DEFAULT_NODATA_THRESHOLD
+
+    thresholds: list[float] = []
+    for attr_name in ("calibration_missing_data", "calibration_out_of_image"):
+        if attr_name in calibration.attrs:
+            thresholds.append(float(np.asarray(calibration.attrs[attr_name]).reshape(-1)[0]))
+
+    return min(thresholds) if thresholds else DEFAULT_NODATA_THRESHOLD
+
 
 def _decode_attr(value: bytes | str) -> str:
     if isinstance(value, bytes):
@@ -86,8 +106,10 @@ def read_step_array(path: Path | str, lead_minutes: int) -> tuple[np.ndarray, Kn
                 geographic["map_projection"].attrs["projection_proj4_params"]
             ),
         )
-        raw = np.array(handle[image_name]["image_data"], dtype=np.float32)
-        masked = np.where(raw >= 255, np.nan, raw)
+        image_group = handle[image_name]
+        raw = np.array(image_group["image_data"], dtype=np.float32)
+        nodata_threshold = _read_nodata_threshold(image_group)
+        masked = np.where(raw >= nodata_threshold, np.nan, raw)
         mm_hr = masked * 0.01 * 12
         return mm_hr, grid
 

@@ -12,8 +12,13 @@ def create_sample_radar_forecast_h5(
     *,
     step_count: int = 3,
     issued_at: datetime | None = None,
+    pixel_value_at: tuple[int, int, int] | None = None,
 ) -> Path:
-    """Create a minimal KNMI-style radar forecast HDF5 file for tests."""
+    """Create a minimal KNMI-style radar forecast HDF5 file for tests.
+
+    `pixel_value_at`, if given, is `(row, col, raw_value)` and sets that pixel's
+    raw value on every step's image_data (default is an all-zero grid).
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     if issued_at is None:
         issued_at = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
@@ -32,11 +37,21 @@ def create_sample_radar_forecast_h5(
         for index in range(1, step_count + 1):
             image_name = f"image{index}"
             image_group = handle.create_group(image_name)
-            image_group.create_dataset("image_data", data=np.zeros((765, 700), dtype=np.uint8))
+            image_data = np.zeros((765, 700), dtype=np.uint16)
+            if pixel_value_at is not None:
+                row, col, raw_value = pixel_value_at
+                image_data[row, col] = raw_value
+            image_group.create_dataset("image_data", data=image_data)
             valid_at = issued_at + timedelta(minutes=(index - 1) * 5)
             image_group.attrs["image_datetime_valid"] = valid_at.strftime(
                 "%d-%b-%Y;%H:%M:%S.%f"
             ).encode("utf-8")
+
+            calibration = image_group.create_group("calibration")
+            calibration.attrs["calibration_flag"] = b"Y"
+            calibration.attrs["calibration_formulas"] = b"GEO=0.010000*PV+0.000000"
+            calibration.attrs["calibration_missing_data"] = np.array([65534], dtype=np.int32)
+            calibration.attrs["calibration_out_of_image"] = np.array([65535], dtype=np.int32)
 
     return path
 

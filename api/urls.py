@@ -16,4 +16,5 @@ urlpatterns = [
         views.ensemble_frame,
         name="ensemble-frame",
     ),
+    path("radar/point/", views.radar_point, name="radar-point"),
 ]

@@ -7,6 +7,7 @@ import numpy as np
 import rasterio
 from django.conf import settings
 from PIL import Image
+from pyproj import Transformer
 from rasterio.crs import CRS
 from rasterio.transform import from_origin
 from rasterio.warp import Resampling, calculate_default_transform, reproject
@@ -20,6 +21,14 @@ class RenderedFrame:
     path: Path
     bbox: tuple[float, float, float, float]
 
+
+# MapLibre's `image` source stretches the PNG linearly over the quad formed by
+# the four corner coordinates *after* projecting them to Web Mercator. A frame
+# rendered in EPSG:4326 is linear in latitude, not in Mercator y, so that
+# stretch misplaces every interior pixel: over the Netherlands it pushed rain
+# about 16 km too far north (worst around 52.5N, zero at the bbox edges).
+# Rendering the frame in Web Mercator makes MapLibre's linear mapping exact.
+WEB_MERCATOR_CRS = CRS.from_epsg(3857)
 
 MIN_VISIBLE_MM_HR = 0.1
 COLOR_STOPS = (
@@ -35,7 +44,58 @@ COLOR_STOPS = (
 
 def frame_cache_path(filename: str, lead_minutes: int) -> Path:
     stem = Path(filename).stem
-    return Path(settings.KNMI_RADAR_FORECAST_DATA_DIR) / "frames" / f"{stem}_{lead_minutes}.png"
+    return (
+        Path(settings.KNMI_RADAR_FORECAST_DATA_DIR)
+        / "frames"
+        / f"{stem}_{lead_minutes}_3857.png"
+    )
+
+
+def warp_to_web_mercator(
+    values: np.ndarray,
+    src_crs: CRS,
+    src_transform,
+    rows: int,
+    cols: int,
+) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+    """Reproject a source grid to Web Mercator.
+
+    Returns the warped array plus its extent as (west, south, east, north) in
+    degrees, which is what MapLibre wants for the image source corners.
+    """
+    transform, width, height = calculate_default_transform(
+        src_crs,
+        WEB_MERCATOR_CRS,
+        cols,
+        rows,
+        *rasterio.transform.array_bounds(rows, cols, src_transform),
+    )
+
+    destination = np.full((height, width), np.nan, dtype=np.float32)
+    reproject(
+        source=np.ascontiguousarray(values, dtype=np.float32),
+        destination=destination,
+        src_transform=src_transform,
+        src_crs=src_crs,
+        dst_transform=transform,
+        dst_crs=WEB_MERCATOR_CRS,
+        resampling=Resampling.bilinear,
+        src_nodata=np.nan,
+        dst_nodata=np.nan,
+    )
+
+    bounds = rasterio.transform.array_bounds(height, width, transform)
+    return destination, mercator_bounds_to_lnglat(bounds)
+
+
+def mercator_bounds_to_lnglat(
+    bounds: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    west_m, south_m, east_m, north_m = bounds
+    transformer = Transformer.from_crs(WEB_MERCATOR_CRS, "EPSG:4326", always_xy=True)
+    west, south = transformer.transform(west_m, south_m)
+    east, north = transformer.transform(east_m, north_m)
+    return (west, south, east, north)
 
 
 def render_forecast_frame(forecast: RadarForecast, lead_minutes: int) -> RenderedFrame:
@@ -62,32 +122,14 @@ def _warp_and_colormap(
         1000,
         1000,
     )
-    dst_crs = CRS.from_epsg(4326)
-    transform, width, height = calculate_default_transform(
+    destination, bbox = warp_to_web_mercator(
+        mm_hr,
         src_crs,
-        dst_crs,
-        grid.cols,
+        src_transform,
         grid.rows,
-        *rasterio.transform.array_bounds(grid.rows, grid.cols, src_transform),
+        grid.cols,
     )
-
-    destination = np.full((height, width), np.nan, dtype=np.float32)
-    reproject(
-        source=mm_hr,
-        destination=destination,
-        src_transform=src_transform,
-        src_crs=src_crs,
-        dst_transform=transform,
-        dst_crs=dst_crs,
-        resampling=Resampling.bilinear,
-        src_nodata=np.nan,
-        dst_nodata=np.nan,
-    )
-
-    rgba = _apply_colormap(destination)
-    bounds = rasterio.transform.array_bounds(height, width, transform)
-    bbox = (bounds[0], bounds[1], bounds[2], bounds[3])
-    return rgba, bbox
+    return _apply_colormap(destination), bbox
 
 
 def _apply_colormap(values: np.ndarray) -> np.ndarray:

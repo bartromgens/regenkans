@@ -6,6 +6,7 @@ import {
   ViewChild,
   effect,
   input,
+  output,
 } from '@angular/core';
 import * as maplibregl from 'maplibre-gl';
 
@@ -15,6 +16,11 @@ const OVERLAY_LAYER_ID = 'radar-overlay-layer';
 export interface RadarOverlay {
   imageUrl: string;
   bbox: [number, number, number, number];
+}
+
+export interface MapLocation {
+  lng: number;
+  lat: number;
 }
 
 @Component({
@@ -27,8 +33,12 @@ export class RadarMap implements OnInit, OnDestroy {
   mapContainer!: ElementRef<HTMLDivElement>;
 
   readonly overlay = input<RadarOverlay | null>(null);
+  readonly markerLocation = input<MapLocation | null>(null);
+
+  readonly locationClick = output<MapLocation>();
 
   private map: maplibregl.Map | null = null;
+  private marker: maplibregl.Marker | null = null;
 
   constructor() {
     effect(() => {
@@ -39,6 +49,10 @@ export class RadarMap implements OnInit, OnDestroy {
         void this.clearOverlay();
       }
     });
+
+    effect(() => {
+      this.updateMarker(this.markerLocation());
+    });
   }
 
   ngOnInit(): void {
@@ -46,6 +60,7 @@ export class RadarMap implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.marker?.remove();
     this.map?.remove();
   }
 
@@ -58,6 +73,33 @@ export class RadarMap implements OnInit, OnDestroy {
     });
 
     this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    this.map.on('click', (event) => {
+      this.locationClick.emit({
+        lng: event.lngLat.lng,
+        lat: event.lngLat.lat,
+      });
+    });
+  }
+
+  private updateMarker(location: MapLocation | null): void {
+    if (!this.map) {
+      return;
+    }
+
+    if (!location) {
+      this.marker?.remove();
+      this.marker = null;
+      return;
+    }
+
+    if (this.marker) {
+      this.marker.setLngLat([location.lng, location.lat]);
+      return;
+    }
+
+    this.marker = new maplibregl.Marker({ color: '#1d4ed8' })
+      .setLngLat([location.lng, location.lat])
+      .addTo(this.map);
   }
 
   private async applyOverlay(overlay: RadarOverlay): Promise<void> {

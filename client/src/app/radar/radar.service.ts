@@ -29,6 +29,21 @@ export interface ProbabilityTimelineResponse extends RadarTimelineResponse {
   ensemble_available: boolean;
 }
 
+export interface PointSeriesPoint {
+  valid_at: string;
+  kind: FrameKind;
+  intensity: number | null;
+  probability: number | null;
+  expected: number | null;
+}
+
+export interface PointSeriesResponse {
+  lat: number;
+  lng: number;
+  now: string | null;
+  points: PointSeriesPoint[];
+}
+
 @Injectable({ providedIn: 'root' })
 export class RadarService {
   private readonly http = inject(HttpClient);
@@ -43,6 +58,16 @@ export class RadarService {
   getProbabilityTimeline(hours = 24): Observable<ProbabilityTimelineResponse> {
     return this.http.get<ProbabilityTimelineResponse>('/api/ensemble/timeline/', {
       params: { hours: String(hours) },
+    });
+  }
+
+  getPointSeries(lat: number, lng: number, hours = 24): Observable<PointSeriesResponse> {
+    return this.http.get<PointSeriesResponse>('/api/radar/point/', {
+      params: {
+        lat: String(lat),
+        lng: String(lng),
+        hours: String(hours),
+      },
     });
   }
 

@@ -3,12 +3,19 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import numpy as np
 from django.test import TestCase, override_settings
+from PIL import Image
+from pyproj import Transformer
 
+from radar.hdf5 import KNMI_PROJ4_METERS
 from radar.models import RadarForecast, RadarForecastStep
 from radar.render import render_forecast_frame
 from radar.tests.fixtures import create_sample_radar_forecast_h5
 from radar.timeline import build_timeline, build_unified_timeline
+
+KNMI_GRID_ROW_OFFSET_M = 3650 * 1000
+KNMI_GRID_PIXEL_M = 1000
 
 
 @override_settings(KNMI_RADAR_FORECAST_DATA_DIR=Path("/tmp/regenkans-timeline-test"))
@@ -98,3 +105,66 @@ class RenderTests(TestCase):
         self.assertTrue(rendered.path.exists())
         self.assertEqual(len(rendered.bbox), 4)
         self.assertTrue(rendered.path.with_suffix(".bbox").exists())
+
+    def test_rendered_frame_is_georeferenced_for_a_mercator_quad(self):
+        """A single rain pixel must land on its true position once drawn.
+
+        The client hands the frame to MapLibre as an `image` source, which
+        stretches the PNG linearly over the four corners *in Web Mercator
+        space*. This replicates that mapping and checks the round trip, which
+        is what a frame rendered in EPSG:4326 got wrong: latitude is not linear
+        in Mercator y, so Dutch rain was drawn ~15 km too far north.
+        """
+        spike_row, spike_col = 427, 369
+        path = create_sample_radar_forecast_h5(
+            self.data_dir / "RAD_NL25_RAC_FM_202608301500.h5",
+            step_count=1,
+            pixel_value_at=(spike_row, spike_col, 1000),
+        )
+        forecast = RadarForecast.objects.create(
+            filename=path.name,
+            issued_at=datetime(2026, 8, 30, 15, 0, tzinfo=timezone.utc),
+            file_path=str(path),
+            status=RadarForecast.Status.PARSED,
+            rows=765,
+            cols=700,
+        )
+        RadarForecastStep.objects.create(
+            forecast=forecast,
+            image_name="image1",
+            lead_minutes=0,
+            valid_at=forecast.issued_at,
+        )
+
+        rendered = render_forecast_frame(forecast, 0)
+
+        # True position of that source pixel's centre.
+        to_lnglat = Transformer.from_crs(KNMI_PROJ4_METERS, "EPSG:4326", always_xy=True)
+        expected_lng, expected_lat = to_lnglat.transform(
+            spike_col * KNMI_GRID_PIXEL_M + KNMI_GRID_PIXEL_M / 2,
+            -KNMI_GRID_ROW_OFFSET_M - (spike_row * KNMI_GRID_PIXEL_M + KNMI_GRID_PIXEL_M / 2),
+        )
+
+        # Where the spike ended up in the PNG, as a fraction of the image.
+        alpha = np.asarray(Image.open(rendered.path).convert("RGBA"))[:, :, 3]
+        rows, cols = np.nonzero(alpha)
+        self.assertGreater(rows.size, 0, "expected the rain spike to be rendered")
+        fraction_x = (cols.mean() + 0.5) / alpha.shape[1]
+        fraction_y = (rows.mean() + 0.5) / alpha.shape[0]
+
+        # Replicate MapLibre: linear interpolation across the quad in Mercator.
+        west, south, east, north = rendered.bbox
+        to_mercator = Transformer.from_crs("EPSG:4326", "EPSG:3857", always_xy=True)
+        left, top = to_mercator.transform(west, north)
+        right, bottom = to_mercator.transform(east, south)
+        drawn_lng, drawn_lat = Transformer.from_crs(
+            "EPSG:3857", "EPSG:4326", always_xy=True
+        ).transform(
+            left + fraction_x * (right - left),
+            top + fraction_y * (bottom - top),
+        )
+
+        # One source pixel is 1 km, so sub-kilometre agreement is exact enough;
+        # the EPSG:4326 bug missed by ~15 km.
+        self.assertAlmostEqual(drawn_lat, expected_lat, delta=0.009)  # ~1 km
+        self.assertAlmostEqual(drawn_lng, expected_lng, delta=0.015)  # ~1 km

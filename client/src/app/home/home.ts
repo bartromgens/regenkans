@@ -2,12 +2,15 @@ import {
   Component,
   DestroyRef,
   OnInit,
+  computed,
   inject,
   signal,
 } from '@angular/core';
 import {
   FrameSource,
   OverlayMode,
+  PointSeriesPoint,
+  PointSeriesResponse,
   ProbabilityTimelineResponse,
   RadarService,
   TimelineSlot,
@@ -15,10 +18,11 @@ import {
 import { ModeToggle } from './mode-toggle/mode-toggle';
 import { MapLegend } from './map-legend/map-legend';
 import { TimelinePanel } from './timeline-panel/timeline-panel';
-import { RadarMap, RadarOverlay } from './radar-map/radar-map';
+import { MapLocation, RadarMap, RadarOverlay } from './radar-map/radar-map';
+import { RainChart } from './rain-chart/rain-chart';
 
 @Component({
-  imports: [ModeToggle, MapLegend, TimelinePanel, RadarMap],
+  imports: [ModeToggle, MapLegend, TimelinePanel, RadarMap, RainChart],
   selector: 'app-home',
   styleUrl: './home.scss',
   templateUrl: './home.html',
@@ -27,6 +31,7 @@ export class Home implements OnInit {
   private readonly radarService = inject(RadarService);
   private readonly destroyRef = inject(DestroyRef);
   private frameLoadToken = 0;
+  private pointLoadToken = 0;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
   private sharedBbox: [number, number, number, number] | null = null;
   private sharedBboxImageUrl: string | null = null;
@@ -41,9 +46,28 @@ export class Home implements OnInit {
   readonly mode = signal<OverlayMode>('intensity');
   readonly ensembleAvailable = signal(false);
   readonly overlay = signal<RadarOverlay | null>(null);
+  readonly selectedLocation = signal<MapLocation | null>(null);
+  readonly pointSeries = signal<PointSeriesPoint[]>([]);
+  readonly pointLoading = signal(false);
+  readonly pointError = signal<string | null>(null);
+  readonly locationLabel = signal('');
 
   ngOnInit(): void {
     void this.loadTimeline();
+  }
+
+  onMapClick(location: MapLocation): void {
+    this.selectedLocation.set(location);
+    this.locationLabel.set(this.formatLocation(location));
+    void this.loadPointSeries(location);
+  }
+
+  onChartClosed(): void {
+    this.selectedLocation.set(null);
+    this.pointSeries.set([]);
+    this.pointError.set(null);
+    this.pointLoading.set(false);
+    this.locationLabel.set('');
   }
 
   onSliderInput(index: number): void {
@@ -223,4 +247,46 @@ export class Home implements OnInit {
       minute: '2-digit',
     }).format(new Date(value));
   }
+
+  private formatLocation(location: MapLocation): string {
+    const lat = location.lat.toFixed(3);
+    const lng = location.lng.toFixed(3);
+    return `${lat}°N, ${lng}°E`;
+  }
+
+  private async loadPointSeries(location: MapLocation): Promise<void> {
+    const token = ++this.pointLoadToken;
+    this.pointLoading.set(true);
+    this.pointError.set(null);
+    this.pointSeries.set([]);
+
+    try {
+      const response = await new Promise<PointSeriesResponse>((resolve, reject) => {
+          this.radarService.getPointSeries(location.lat, location.lng).subscribe({
+            next: resolve,
+            error: reject,
+          });
+      });
+
+      if (token !== this.pointLoadToken) {
+        return;
+      }
+
+      this.pointSeries.set(response.points);
+    } catch {
+      if (token === this.pointLoadToken) {
+        this.pointError.set('Could not load rain series for this location.');
+      }
+    } finally {
+      if (token === this.pointLoadToken) {
+        this.pointLoading.set(false);
+      }
+    }
+  }
+
+  readonly selectedValidAt = computed(() => {
+    const frames = this.frames();
+    const index = this.selectedIndex();
+    return frames[index]?.valid_at ?? null;
+  });
 }

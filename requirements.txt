@@ -1,5 +1,8 @@
 Django==6.1
 djangorestframework==3.18.0
+gunicorn==23.0.0
+psycopg[binary]==3.3.4
+whitenoise==6.9.0
 h5py==3.14.0
 numpy==2.3.2
 Pillow==11.3.0

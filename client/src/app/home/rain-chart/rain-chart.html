@@ -1,0 +1,25 @@
+<div class="rain-chart-panel">
+  <div class="rain-chart-header">
+    <div>
+      <div class="rain-chart-title">Rain at this location</div>
+      @if (locationLabel()) {
+        <div class="rain-chart-location">{{ locationLabel() }}</div>
+      }
+    </div>
+    <button type="button" class="rain-chart-close" (click)="close()" aria-label="Close chart">
+      ×
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="rain-chart-state">Loading rain series…</div>
+  } @else if (error()) {
+    <div class="rain-chart-state rain-chart-state--error">{{ error() }}</div>
+  } @else if (series().length === 0) {
+    <div class="rain-chart-state">No rain data available for this location.</div>
+  } @else {
+    <div class="rain-chart-canvas-wrap">
+      <canvas #chartCanvas aria-label="Rain intensity, probability, and expected rain chart"></canvas>
+    </div>
+  }
+</div>

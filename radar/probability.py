@@ -5,16 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import rasterio
 from django.conf import settings
 from PIL import Image
 from rasterio.crs import CRS
 from rasterio.transform import from_origin
-from rasterio.warp import Resampling, calculate_default_transform, reproject
 
 from radar.models import EnsembleForecast
 from radar.netcdf import EnsembleGridInfo, read_probability_of_precipitation
-from radar.render import read_cached_bbox
+from radar.render import read_cached_bbox, warp_to_web_mercator
 
 _RENDER_LOCK = threading.Lock()
 
@@ -40,7 +38,7 @@ def probability_frame_cache_path(filename: str, lead_minutes: int) -> Path:
     return (
         Path(settings.KNMI_ENSEMBLE_FORECAST_DATA_DIR)
         / "frames"
-        / f"{stem}_{lead_minutes}_pop01.png"
+        / f"{stem}_{lead_minutes}_pop01_3857.png"
     )
 
 
@@ -70,55 +68,35 @@ def _warp_and_colormap(
     grid: EnsembleGridInfo,
 ) -> tuple[np.ndarray, tuple[float, float, float, float]]:
     if grid.geographic:
-        return _colormap_geographic(pop, grid)
+        src_crs = CRS.from_epsg(4326)
+        values, src_transform = _geographic_source(pop, grid)
+    else:
+        src_crs = CRS.from_proj4(_proj4_in_meters(grid.proj4))
+        values = pop
+        src_transform = _transform_from_coords(grid.x_coords_km, grid.y_coords_km)
 
-    src_crs = CRS.from_proj4(_proj4_in_meters(grid.proj4))
-    src_transform = _transform_from_coords(grid.x_coords_km, grid.y_coords_km)
-    dst_crs = CRS.from_epsg(4326)
-    transform, width, height = calculate_default_transform(
+    destination, bbox = warp_to_web_mercator(
+        values,
         src_crs,
-        dst_crs,
-        grid.cols,
+        src_transform,
         grid.rows,
-        *rasterio.transform.array_bounds(grid.rows, grid.cols, src_transform),
+        grid.cols,
     )
-
-    destination = np.full((height, width), np.nan, dtype=np.float32)
-    reproject(
-        source=pop,
-        destination=destination,
-        src_transform=src_transform,
-        src_crs=src_crs,
-        dst_transform=transform,
-        dst_crs=dst_crs,
-        resampling=Resampling.bilinear,
-        src_nodata=np.nan,
-        dst_nodata=np.nan,
-    )
-
-    rgba = _apply_pop_colormap(destination)
-    bounds = rasterio.transform.array_bounds(height, width, transform)
-    bbox = (bounds[0], bounds[1], bounds[2], bounds[3])
-    return rgba, bbox
+    return _apply_pop_colormap(destination), bbox
 
 
-def _colormap_geographic(
-    pop: np.ndarray,
-    grid: EnsembleGridInfo,
-) -> tuple[np.ndarray, tuple[float, float, float, float]]:
+def _geographic_source(pop: np.ndarray, grid: EnsembleGridInfo):
+    """Build a north-up EPSG:4326 array + transform for a native lon/lat grid."""
     lon = np.asarray(grid.x_coords_km, dtype=np.float64)
     lat = np.asarray(grid.y_coords_km, dtype=np.float64)
     values = pop
     if len(lat) > 1 and lat[0] < lat[-1]:
         values = np.flipud(values)
-    rgba = _apply_pop_colormap(values)
     lon_res = abs(float(lon[1] - lon[0])) if len(lon) > 1 else 0.01
     lat_res = abs(float(lat[1] - lat[0])) if len(lat) > 1 else 0.01
     west = float(np.min(lon)) - lon_res / 2
-    east = float(np.max(lon)) + lon_res / 2
-    south = float(np.min(lat)) - lat_res / 2
     north = float(np.max(lat)) + lat_res / 2
-    return rgba, (west, south, east, north)
+    return values, from_origin(west, north, lon_res, lat_res)
 
 
 def _transform_from_coords(

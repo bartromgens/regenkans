@@ -1,5 +1,9 @@
 <div class="map-layout">
-  <app-radar-map [overlay]="overlay()" />
+  <app-radar-map
+    [overlay]="overlay()"
+    [markerLocation]="selectedLocation()"
+    (locationClick)="onMapClick($event)"
+  />
 
   @if (!loading() && !timelineError()) {
     <app-mode-toggle
@@ -9,6 +13,17 @@
     />
 
     <app-map-legend [mode]="mode()" />
+  }
+
+  @if (selectedLocation()) {
+    <app-rain-chart
+      [series]="pointSeries()"
+      [selectedValidAt]="selectedValidAt()"
+      [loading]="pointLoading()"
+      [error]="pointError()"
+      [locationLabel]="locationLabel()"
+      (closed)="onChartClosed()"
+    />
   }
 
   <app-timeline-panel

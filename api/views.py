@@ -2,8 +2,10 @@ from django.http import FileResponse, Http404
 from django.utils.http import http_date
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from rest_framework import status
 
 from radar.models import EnsembleForecast, RadarForecast
+from radar.point import build_point_series
 from radar.probability import render_probability_frame
 from radar.render import render_forecast_frame
 from radar.timeline import serialize_probability_timeline, serialize_timeline
@@ -73,3 +75,29 @@ def ensemble_frame(request, filename: str, lead_minutes: int):
     response["Access-Control-Expose-Headers"] = "X-Radar-BBox"
     response["Last-Modified"] = http_date(rendered.path.stat().st_mtime)
     return response
+
+
+@api_view(["GET"])
+def radar_point(request):
+    try:
+        lat = float(request.query_params.get("lat", ""))
+        lng = float(request.query_params.get("lng", ""))
+    except (TypeError, ValueError):
+        return Response(
+            {"detail": "lat and lng query parameters are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not (-90 <= lat <= 90):
+        return Response(
+            {"detail": "lat must be between -90 and 90."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not (-180 <= lng <= 180):
+        return Response(
+            {"detail": "lng must be between -180 and 180."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    hours = int(request.query_params.get("hours", 24))
+    return Response(build_point_series(lat, lng, hours=hours))
