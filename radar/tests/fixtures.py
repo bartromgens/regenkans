@@ -183,6 +183,10 @@ def create_live_ensemble_forecast_nc(
         precip.grid_mapping = "latitude_longitude"
         precip.scale_factor = scale_factor
         precip.add_offset = 0.0
+        # Write already-packed integers. Leaving auto-scale on would pack
+        # again (20 -> 2000), which cancelled a double scale on read and hid
+        # the point-sampler PoP bug (values 100x too small).
+        precip.set_auto_maskandscale(False)
         precip[:] = raw
 
         mapping = dataset.createVariable("latitude_longitude", "f8")

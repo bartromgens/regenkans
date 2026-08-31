@@ -1,10 +1,13 @@
 import {
   Component,
+  DestroyRef,
   ElementRef,
   OnDestroy,
   afterRenderEffect,
+  inject,
   input,
   output,
+  signal,
   viewChild,
 } from '@angular/core';
 import {
@@ -13,7 +16,6 @@ import {
   LineElement,
   PointElement,
   LinearScale,
-  CategoryScale,
   Tooltip,
   Legend,
   Filler,
@@ -26,12 +28,15 @@ Chart.register(
   LineElement,
   PointElement,
   LinearScale,
-  CategoryScale,
   Tooltip,
   Legend,
   Filler,
   annotationPlugin,
 );
+
+const HOUR_MS = 60 * 60 * 1000;
+const WINDOW_BEFORE_MS = 1 * HOUR_MS;
+const WINDOW_AFTER_MS = 2 * HOUR_MS;
 
 @Component({
   selector: 'app-rain-chart',
@@ -39,7 +44,9 @@ Chart.register(
   templateUrl: './rain-chart.html',
 })
 export class RainChart implements OnDestroy {
+  private readonly destroyRef = inject(DestroyRef);
   private readonly chartCanvas = viewChild<ElementRef<HTMLCanvasElement>>('chartCanvas');
+  private readonly clockMs = signal(Date.now());
 
   readonly series = input<PointSeriesPoint[]>([]);
   readonly selectedValidAt = input<string | null>(null);
@@ -52,11 +59,15 @@ export class RainChart implements OnDestroy {
   private chart: Chart | null = null;
 
   constructor() {
+    const intervalId = window.setInterval(() => this.clockMs.set(Date.now()), 30_000);
+    this.destroyRef.onDestroy(() => window.clearInterval(intervalId));
+
     afterRenderEffect(() => {
       this.series();
       this.selectedValidAt();
       this.loading();
       this.error();
+      this.clockMs();
       this.renderChart();
     });
   }
@@ -80,26 +91,24 @@ export class RainChart implements OnDestroy {
 
     this.chart?.destroy();
 
-    const labels = points.map((point) =>
-      new Intl.DateTimeFormat('nl-NL', {
-        timeZone: 'Europe/Amsterdam',
-        hour: '2-digit',
-        minute: '2-digit',
-      }).format(new Date(point.valid_at)),
-    );
+    const nowMs = this.clockMs();
+    const minMs = nowMs - WINDOW_BEFORE_MS;
+    const maxMs = nowMs + WINDOW_AFTER_MS;
+    const windowed = points.filter((point) => {
+      const timeMs = new Date(point.valid_at).getTime();
+      return timeMs >= minMs && timeMs <= maxMs;
+    });
 
-    const intensityData = points.map((point) => point.intensity);
-    const expectedData = points.map((point) => point.expected);
-    const probabilityData = points.map((point) =>
+    const intensityData = toChartPoints(windowed, (point) => point.intensity);
+    const probabilityData = toChartPoints(windowed, (point) =>
       point.probability === null ? null : point.probability * 100,
     );
 
-    const selectedIndex = this.resolveSelectedIndex(points, this.selectedValidAt());
+    const selectedMs = this.resolveSelectedMs(this.selectedValidAt(), minMs, maxMs);
 
     this.chart = new Chart(canvas, {
       type: 'line',
       data: {
-        labels,
         datasets: [
           {
             label: 'Intensity (mm/h)',
@@ -111,17 +120,6 @@ export class RainChart implements OnDestroy {
             pointRadius: 0,
             pointHitRadius: 8,
             spanGaps: false,
-          },
-          {
-            label: 'Expected rain (mm/h)',
-            data: expectedData,
-            borderColor: '#7c3aed',
-            backgroundColor: 'rgba(124, 58, 237, 0.08)',
-            yAxisID: 'y',
-            tension: 0.25,
-            pointRadius: 0,
-            pointHitRadius: 8,
-            spanGaps: true,
           },
           {
             label: 'Probability (%)',
@@ -139,8 +137,15 @@ export class RainChart implements OnDestroy {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        animation: false,
+        layout: {
+          padding: {
+            top: 22,
+          },
+        },
         interaction: {
-          mode: 'index',
+          mode: 'nearest',
+          axis: 'x',
           intersect: false,
         },
         plugins: {
@@ -155,19 +160,17 @@ export class RainChart implements OnDestroy {
           tooltip: {
             callbacks: {
               title: (items) => {
-                const index = items[0]?.dataIndex ?? 0;
-                const point = points[index];
-                if (!point) {
+                const timeMs = items[0]?.parsed.x;
+                if (timeMs == null) {
                   return '';
                 }
-                return new Intl.DateTimeFormat('nl-NL', {
-                  timeZone: 'Europe/Amsterdam',
+                return formatChartTime(timeMs, {
                   weekday: 'short',
                   day: 'numeric',
                   month: 'short',
                   hour: '2-digit',
                   minute: '2-digit',
-                }).format(new Date(point.valid_at));
+                });
               },
               label: (context) => {
                 const value = context.parsed.y;
@@ -181,30 +184,24 @@ export class RainChart implements OnDestroy {
               },
             },
           },
-          annotation: selectedIndex === null
-            ? undefined
-            : {
-                annotations: {
-                  selectedTime: {
-                    type: 'line',
-                    xMin: selectedIndex,
-                    xMax: selectedIndex,
-                    borderColor: '#64748b',
-                    borderWidth: 1,
-                    borderDash: [4, 4],
-                  },
-                },
-              },
+          annotation: buildAnnotations(selectedMs, nowMs),
         },
         scales: {
           x: {
+            type: 'linear',
+            min: minMs,
+            max: maxMs,
             grid: {
               display: false,
             },
             ticks: {
               maxRotation: 0,
               autoSkip: true,
-              maxTicksLimit: 8,
+              maxTicksLimit: 7,
+              callback: (value) => formatChartTime(Number(value), {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
             },
           },
           y: {
@@ -234,15 +231,97 @@ export class RainChart implements OnDestroy {
     });
   }
 
-  private resolveSelectedIndex(
-    points: PointSeriesPoint[],
+  private resolveSelectedMs(
     selectedValidAt: string | null,
+    minMs: number,
+    maxMs: number,
   ): number | null {
-    if (!selectedValidAt || points.length === 0) {
+    if (!selectedValidAt) {
       return null;
     }
 
-    const index = points.findIndex((point) => point.valid_at === selectedValidAt);
-    return index >= 0 ? index : null;
+    const selectedMs = new Date(selectedValidAt).getTime();
+    if (!Number.isFinite(selectedMs) || selectedMs < minMs || selectedMs > maxMs) {
+      return null;
+    }
+    return selectedMs;
   }
+}
+
+function toChartPoints(
+  points: PointSeriesPoint[],
+  valueOf: (point: PointSeriesPoint) => number | null,
+): { x: number; y: number | null }[] {
+  return points.map((point) => ({
+    x: new Date(point.valid_at).getTime(),
+    y: valueOf(point),
+  }));
+}
+
+function formatChartTime(
+  timeMs: number,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  return new Intl.DateTimeFormat('nl-NL', {
+    timeZone: 'Europe/Amsterdam',
+    ...options,
+  }).format(new Date(timeMs));
+}
+
+function buildAnnotations(
+  selectedMs: number | null,
+  nowMs: number | null,
+) {
+  return {
+    clip: false,
+    annotations: {
+      ...(nowMs === null
+        ? {}
+        : {
+            nowTime: {
+              type: 'line' as const,
+              xMin: nowMs,
+              xMax: nowMs,
+              borderColor: '#1d4ed8',
+              borderWidth: 2,
+            },
+            nowLabel: {
+              type: 'label' as const,
+              xValue: nowMs,
+              xScaleID: 'x',
+              yValue: (ctx: { chart: Chart }) => ctx.chart.scales['y']?.max ?? 0,
+              yScaleID: 'y',
+              content: 'Now',
+              position: {
+                x: 'center' as const,
+                y: 'end' as const,
+              },
+              yAdjust: -4,
+              backgroundColor: '#1d4ed8',
+              color: '#ffffff',
+              borderRadius: 4,
+              font: {
+                size: 10,
+                weight: 600,
+              },
+              padding: {
+                x: 6,
+                y: 2,
+              },
+            },
+          }),
+      ...(selectedMs === null
+        ? {}
+        : {
+            selectedTime: {
+              type: 'line' as const,
+              xMin: selectedMs,
+              xMax: selectedMs,
+              borderColor: '#64748b',
+              borderWidth: 1,
+              borderDash: [4, 4],
+            },
+          }),
+    },
+  };
 }

@@ -4,14 +4,15 @@ import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.urls import reverse
 from pyproj import Transformer
 
 from radar.hdf5 import DEFAULT_NODATA_THRESHOLD, KNMI_PROJ4_METERS, pixel_to_mm_hr
 from radar.models import RadarForecast, RadarForecastStep
-from radar.point import _radar_indices
-from radar.tests.fixtures import create_sample_radar_forecast_h5
+from radar.netcdf import read_probability_of_precipitation
+from radar.point import _EnsemblePointSampler, _radar_indices
+from radar.tests.fixtures import create_live_ensemble_forecast_nc, create_sample_radar_forecast_h5
 
 
 class RadarIndicesTests(TestCase):
@@ -230,3 +231,41 @@ class RadarPointHeavyRainTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertIsNone(payload["points"][0]["intensity"])
+
+
+class EnsemblePointSamplerScaleTests(SimpleTestCase):
+    """Live KNMI files store packed uint16 precip with scale_factor=0.01.
+
+    netCDF4 unpacks on read. Multiplying by scale_factor again made 0.2 mm/h
+    look like 0.002, so only members >= 10 mm/h counted as wet and the
+    location-plot PoP line stayed at or below 10%.
+    """
+
+    WET_ROW = 4
+    WET_COL = 6
+
+    def setUp(self):
+        import tempfile
+
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tempdir.cleanup)
+
+    def test_live_format_probability_matches_pop_grid_and_wet_fraction(self):
+        path = create_live_ensemble_forecast_nc(
+            Path(self.tempdir.name) / "KNMI_PYSTEPS_BLEND_ENS_202608301755.nc",
+            step_count=3,
+            member_count=20,
+            wet_member_count=10,
+        )
+        pop, grid = read_probability_of_precipitation(path, lead_minutes=5)
+        lat = grid.y_coords_km[self.WET_ROW]
+        lng = grid.x_coords_km[self.WET_COL]
+
+        sampler = _EnsemblePointSampler(path, lng, lat)
+        self.addCleanup(sampler.close)
+
+        self.assertAlmostEqual(sampler.probability_at_lead(5), 0.5)
+        self.assertAlmostEqual(
+            sampler.probability_at_lead(5),
+            float(pop[self.WET_ROW, self.WET_COL]),
+        )

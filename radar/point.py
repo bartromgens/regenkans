@@ -199,8 +199,6 @@ class _EnsemblePointSampler:
         self._time_dim = _find_time_dimension(self._data_var)
         self._row_dim, self._col_dim = _find_spatial_dimensions(self._data_var)
         self._geographic = _is_geographic_grid(self._row_dim, self._col_dim)
-        self._scale_factor = float(getattr(self._data_var, "scale_factor", 1.0))
-        self._fill_value = getattr(self._data_var, "_FillValue", None)
 
         row_size = len(self._dataset.dimensions[self._row_dim])
         col_size = len(self._dataset.dimensions[self._col_dim])
@@ -249,13 +247,15 @@ class _EnsemblePointSampler:
             else:
                 index.append(slice(None))
 
-        members = np.asarray(self._data_var[tuple(index)], dtype=np.float32)
+        # netCDF4 already applies scale_factor/add_offset and masks _FillValue.
+        member_slice = self._data_var[tuple(index)]
+        if np.ma.isMaskedArray(member_slice):
+            members = np.ma.filled(member_slice, np.nan).astype(np.float32)
+        else:
+            members = np.asarray(member_slice, dtype=np.float32)
         if members.ndim != 1:
             raise ValueError(f"Expected 1-D member slice, got shape {members.shape}")
 
-        if self._fill_value is not None:
-            members = np.where(members == self._fill_value, np.nan, members)
-        members = members * self._scale_factor
         valid = np.isfinite(members)
         if not np.any(valid):
             return None
