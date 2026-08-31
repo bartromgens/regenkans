@@ -282,7 +282,7 @@ function buildAnnotations(
               type: 'line' as const,
               xMin: nowMs,
               xMax: nowMs,
-              borderColor: '#1d4ed8',
+              borderColor: '#16a34a',
               borderWidth: 2,
             },
             nowLabel: {
@@ -297,7 +297,7 @@ function buildAnnotations(
                 y: 'end' as const,
               },
               yAdjust: -4,
-              backgroundColor: '#1d4ed8',
+              backgroundColor: '#16a34a',
               color: '#ffffff',
               borderRadius: 4,
               font: {
