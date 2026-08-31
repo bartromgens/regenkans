@@ -71,3 +71,116 @@ npm start
 
 The app runs at http://localhost:4200. During development, `/api` requests are proxied to the Django backend on port 8000.
 
+## Deployment
+
+Production runs as Docker Compose services (`db`, `api`, `client`) with a VPS-level nginx reverse proxy and TLS termination.
+
+**Stack:** Django + Gunicorn (API) · Angular + nginx (client) · PostgreSQL (database)
+
+### One-time VPS setup
+
+1. Clone the repo to `/home/bart/regenkans` and create required directories:
+
+```bash
+git clone <repo-url> /home/bart/regenkans
+cd /home/bart/regenkans
+mkdir -p data/radar_forecast data/ensemble_forecast log
+```
+
+2. Create `config/settings_local.py` (not in git) with production values:
+
+```python
+DEBUG = False
+SECRET_KEY = "generate-a-long-random-secret-key"
+ALLOWED_HOSTS = ["regenkans.nl", "www.regenkans.nl"]
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "regenkans",
+        "USER": "regenkans",
+        "HOST": "db",
+        "PORT": "5432",
+    }
+}
+
+KNMI_OPEN_DATA_API_KEY = "your-knmi-open-data-api-key"
+```
+
+3. Start the stack and run initial migrations:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml exec api python manage.py migrate
+docker compose -f docker-compose.prod.yml exec api python manage.py createsuperuser
+```
+
+4. Configure VPS nginx and TLS using `nginx/regenkans.conf` (see comments at the top of that file for certbot setup).
+
+5. Install cron jobs for data ingestion:
+
+```bash
+crontab -e
+```
+
+```
+*/5 * * * * /home/bart/regenkans/scripts/ingest_radar.sh >> /home/bart/regenkans/log/radar_ingest.log 2>&1
+0 */6 * * * /home/bart/regenkans/scripts/ingest_ensemble.sh >> /home/bart/regenkans/log/ensemble_ingest.log 2>&1
+```
+
+Log output goes to the project's own `log/` directory (already writable by the deploy user), not `/var/log`.
+
+### Deploying updates
+
+Before deploying, make sure all local commits are pushed to `origin/master`. Then run:
+
+```bash
+./deploy.sh
+```
+
+This SSHes into the production server, pulls the latest code, rebuilds the Docker images, restarts the containers, and runs `migrate` and `collectstatic`.
+
+### Management commands on production
+
+Run management commands inside the `api` container:
+
+```bash
+docker compose -f docker-compose.prod.yml exec api python manage.py <command>
+```
+
+For example, to trigger a manual data ingestion:
+
+```bash
+docker compose -f docker-compose.prod.yml exec api python manage.py ingest_radar_forecast
+docker compose -f docker-compose.prod.yml exec api python manage.py ingest_ensemble_forecast
+```
+
+### Viewing production logs
+
+Application log files are written to `./log/` on the host (mounted into the container at `/app/log`):
+
+```bash
+tail -f log/management.log   # management commands
+tail -f log/django.log       # Django app / API
+```
+
+Container stdout (gunicorn and console logging):
+
+```bash
+# Follow logs from all containers
+docker compose -f docker-compose.prod.yml logs -f
+
+# Follow logs from a specific container (api, client, or db)
+docker compose -f docker-compose.prod.yml logs -f api
+```
+
+### Database backups
+
+Download a production database dump to your local machine:
+
+```bash
+./backup-db.sh
+```
+
+Backups are saved to `./backups/regenkans_<timestamp>.dump`.
+

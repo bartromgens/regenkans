@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: regenkans
+      POSTGRES_USER: regenkans
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regenkans -d regenkans"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:8070:8000"
+    volumes:
+      - ./config/settings_local.py:/app/config/settings_local.py:ro
+      - ./data:/app/data
+      - ./log:/app/log
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    ports:
+      - "127.0.0.1:3070:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
