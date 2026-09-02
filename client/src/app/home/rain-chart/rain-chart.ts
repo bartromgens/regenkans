@@ -128,6 +128,7 @@ export class RainChart implements OnDestroy {
     });
 
     const intensityData = toChartPoints(windowed, (point) => point.intensity);
+    const expectedData = toChartPoints(windowed, (point) => point.expected);
     const probabilityData = toChartPoints(windowed, (point) =>
       point.probability === null ? null : point.probability * 100,
     );
@@ -148,6 +149,18 @@ export class RainChart implements OnDestroy {
             pointRadius: 0,
             pointHitRadius: 8,
             spanGaps: false,
+          },
+          {
+            label: 'Verwacht (mm/u)',
+            data: expectedData,
+            borderColor: '#059669',
+            backgroundColor: 'rgba(5, 150, 105, 0.08)',
+            yAxisID: 'y',
+            tension: 0.25,
+            pointRadius: 0,
+            pointHitRadius: 8,
+            spanGaps: true,
+            borderDash: [5, 3],
           },
           {
             label: 'Kans (%)',
