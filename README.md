@@ -125,8 +125,11 @@ crontab -e
 
 ```
 */5 * * * * /home/bart/regenkans/scripts/ingest_radar.sh >> /home/bart/regenkans/log/radar_ingest.log 2>&1
-0 */6 * * * /home/bart/regenkans/scripts/ingest_ensemble.sh >> /home/bart/regenkans/log/ensemble_ingest.log 2>&1
+*/6 * * * * /home/bart/regenkans/scripts/ingest_ensemble.sh >> /home/bart/regenkans/log/ensemble_ingest.log 2>&1
+0 3 * * * /home/bart/regenkans/scripts/cleanup_ensemble.sh >> /home/bart/regenkans/log/ensemble_cleanup.log 2>&1
 ```
+
+The cleanup job deletes ensemble forecast records and NetCDF files older than 1 day (only the latest ensemble forecast is ever served, so older ones are pure disk usage). It always keeps the most recently issued forecast, even if ingestion has stalled.
 
 Log output goes to the project's own `log/` directory (already writable by the deploy user), not `/var/log`.
 
