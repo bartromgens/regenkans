@@ -21,6 +21,8 @@ import { TimelinePanel } from './timeline-panel/timeline-panel';
 import { MapLocation, RadarMap, RadarOverlay } from './radar-map/radar-map';
 import { RainChart } from './rain-chart/rain-chart';
 
+const SCRUB_THROTTLE_MS = 150;
+
 @Component({
   imports: [ModeToggle, MapLegend, TimelinePanel, RadarMap, RainChart],
   selector: 'app-home',
@@ -32,8 +34,11 @@ export class Home implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private frameLoadToken = 0;
   private pointLoadToken = 0;
-  private frameAbortController: AbortController | null = null;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
+  private scrubTimerId: ReturnType<typeof setTimeout> | null = null;
+  private pendingScrubIndex: number | null = null;
+  private lastFrameLoadAt = 0;
+  private appliedImageUrl: string | null = null;
   private sharedBbox: [number, number, number, number] | null = null;
   private sharedBboxImageUrl: string | null = null;
 
@@ -54,6 +59,11 @@ export class Home implements OnInit {
   readonly locationLabel = signal('');
 
   ngOnInit(): void {
+    this.destroyRef.onDestroy(() => {
+      if (this.scrubTimerId !== null) {
+        clearTimeout(this.scrubTimerId);
+      }
+    });
     void this.loadTimeline();
   }
 
@@ -72,10 +82,56 @@ export class Home implements OnInit {
   }
 
   onSliderInput(index: number): void {
-    if (!Number.isFinite(index) || index === this.selectedIndex()) {
+    if (!Number.isFinite(index)) {
       return;
     }
-    void this.selectFrame(index);
+
+    const timelineFrames = this.frames();
+    const slot = timelineFrames[index];
+    if (!slot) {
+      return;
+    }
+
+    this.selectedIndex.set(index);
+    this.currentLabel.set(this.formatValidAt(slot.valid_at));
+    this.prefetchAround(index, timelineFrames);
+    this.scheduleFrameLoad(index);
+  }
+
+  onSliderCommit(index: number): void {
+    if (!Number.isFinite(index)) {
+      return;
+    }
+
+    if (this.scrubTimerId !== null) {
+      clearTimeout(this.scrubTimerId);
+      this.scrubTimerId = null;
+    }
+    this.pendingScrubIndex = null;
+
+    const timelineFrames = this.frames();
+    const slot = timelineFrames[index];
+    if (slot) {
+      this.selectedIndex.set(index);
+      this.currentLabel.set(this.formatValidAt(slot.valid_at));
+    }
+
+    this.lastFrameLoadAt = Date.now();
+    void this.showFrame(index);
+  }
+
+  onOverlayApplied(imageUrl: string): void {
+    this.appliedImageUrl = imageUrl;
+    this.frameError.set(null);
+
+    const expected = this.expectedImageUrlForSelection();
+    if (expected !== null && expected !== imageUrl) {
+      void this.showFrame(this.selectedIndex());
+    }
+  }
+
+  onOverlayFailed(_imageUrl: string): void {
+    this.frameError.set('Kan radarbeeld niet laden.');
   }
 
   async setMode(nextMode: OverlayMode): Promise<void> {
@@ -167,7 +223,46 @@ export class Home implements OnInit {
 
   private async selectFrame(index: number): Promise<void> {
     this.selectedIndex.set(index);
+    this.lastFrameLoadAt = Date.now();
     await this.showFrame(index);
+  }
+
+  private scheduleFrameLoad(index: number): void {
+    this.pendingScrubIndex = index;
+    const elapsed = Date.now() - this.lastFrameLoadAt;
+    if (elapsed >= SCRUB_THROTTLE_MS) {
+      this.runFrameLoad(index);
+      return;
+    }
+
+    if (this.scrubTimerId !== null) {
+      clearTimeout(this.scrubTimerId);
+    }
+
+    this.scrubTimerId = setTimeout(() => {
+      this.scrubTimerId = null;
+      if (this.pendingScrubIndex !== null) {
+        this.runFrameLoad(this.pendingScrubIndex);
+      }
+    }, SCRUB_THROTTLE_MS - elapsed);
+  }
+
+  private runFrameLoad(index: number): void {
+    if (this.scrubTimerId !== null) {
+      clearTimeout(this.scrubTimerId);
+      this.scrubTimerId = null;
+    }
+    this.pendingScrubIndex = null;
+    this.lastFrameLoadAt = Date.now();
+    void this.showFrame(index);
+  }
+
+  private expectedImageUrlForSelection(): string | null {
+    const slot = this.frames()[this.selectedIndex()];
+    if (!slot) {
+      return null;
+    }
+    return this.sourceForMode(slot)?.image_url ?? null;
   }
 
   private sourceForMode(slot: TimelineSlot): FrameSource | null {
@@ -203,10 +298,6 @@ export class Home implements OnInit {
   }
 
   private async showFrame(index: number): Promise<void> {
-    this.frameAbortController?.abort();
-    const abortController = new AbortController();
-    this.frameAbortController = abortController;
-
     const timelineFrames = this.frames();
     const slot = timelineFrames[index];
     if (!slot) {
@@ -214,11 +305,12 @@ export class Home implements OnInit {
     }
 
     this.currentLabel.set(this.formatValidAt(slot.valid_at));
-    this.prefetchAround(index, timelineFrames, abortController.signal);
+    this.prefetchAround(index, timelineFrames);
 
     const source = this.sourceForMode(slot);
     if (!source) {
       this.frameError.set(this.unavailableMessage(this.mode()));
+      this.appliedImageUrl = null;
       this.overlay.set(null);
       return;
     }
@@ -230,7 +322,7 @@ export class Home implements OnInit {
         this.sharedBbox !== null && this.sharedBboxImageUrl === source.image_url;
       const bbox = canReuseBbox
         ? this.sharedBbox!
-        : source.bbox ?? await this.radarService.resolveBbox(source, abortController.signal);
+        : source.bbox ?? await this.radarService.resolveBbox(source);
       if (token !== this.frameLoadToken) {
         return;
       }
@@ -238,10 +330,7 @@ export class Home implements OnInit {
       this.sharedBbox = bbox;
       this.sharedBboxImageUrl = source.image_url;
       this.overlay.set({ imageUrl: source.image_url, bbox });
-    } catch (error: unknown) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        return;
-      }
+    } catch {
       if (token === this.frameLoadToken) {
         this.frameError.set('Kan radarbeeld niet laden.');
       }
@@ -251,7 +340,6 @@ export class Home implements OnInit {
   private prefetchAround(
     index: number,
     timelineFrames: TimelineSlot[],
-    signal: AbortSignal,
   ): void {
     for (let offset = -3; offset <= 3; offset++) {
       const neighbor = timelineFrames[index + offset];
@@ -260,7 +348,7 @@ export class Home implements OnInit {
       }
       const source = this.sourceForMode(neighbor);
       if (source) {
-        this.radarService.prefetchFrame(source.image_url, signal);
+        this.radarService.prefetchFrame(source.image_url);
       }
     }
   }

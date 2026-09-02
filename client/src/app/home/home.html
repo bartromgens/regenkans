@@ -3,6 +3,8 @@
     [overlay]="overlay()"
     [markerLocation]="selectedLocation()"
     (locationClick)="onMapClick($event)"
+    (overlayApplied)="onOverlayApplied($event)"
+    (overlayFailed)="onOverlayFailed($event)"
   />
 
   @if (!loading() && !timelineError()) {
@@ -35,5 +37,6 @@
     [nowIndex]="nowIndex()"
     [currentLabel]="currentLabel()"
     (indexChange)="onSliderInput($event)"
+    (indexCommit)="onSliderCommit($event)"
   />
 </div>

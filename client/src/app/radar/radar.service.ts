@@ -54,6 +54,11 @@ interface BboxResponse {
 export class RadarService {
   private readonly http = inject(HttpClient);
   private readonly bboxCache = new Map<string, [number, number, number, number]>();
+  private readonly pendingBboxFetches = new Map<
+    string,
+    Promise<[number, number, number, number]>
+  >();
+  private readonly prefetchedImageUrls = new Set<string>();
 
   getTimeline(hours = 24): Observable<RadarTimelineResponse> {
     return this.http.get<RadarTimelineResponse>('/api/radar/timeline/', {
@@ -77,10 +82,7 @@ export class RadarService {
     });
   }
 
-  async resolveBbox(
-    source: FrameSource,
-    signal?: AbortSignal,
-  ): Promise<[number, number, number, number]> {
+  async resolveBbox(source: FrameSource): Promise<[number, number, number, number]> {
     if (source.bbox) {
       this.bboxCache.set(source.image_url, source.bbox);
       return source.bbox;
@@ -91,22 +93,36 @@ export class RadarService {
       return cached;
     }
 
-    const response = await fetch(source.bbox_url, { signal });
+    const pending = this.pendingBboxFetches.get(source.bbox_url);
+    if (pending) {
+      return pending;
+    }
+
+    const request = this.fetchBbox(source).finally(() => {
+      this.pendingBboxFetches.delete(source.bbox_url);
+    });
+    this.pendingBboxFetches.set(source.bbox_url, request);
+    return request;
+  }
+
+  prefetchFrame(imageUrl: string): void {
+    if (this.prefetchedImageUrls.has(imageUrl)) {
+      return;
+    }
+    this.prefetchedImageUrls.add(imageUrl);
+    void fetch(imageUrl).catch(() => this.prefetchedImageUrls.delete(imageUrl));
+  }
+
+  private async fetchBbox(
+    source: FrameSource,
+  ): Promise<[number, number, number, number]> {
+    const response = await fetch(source.bbox_url);
     if (!response.ok) {
       throw new Error(`Failed to load radar frame bbox: ${response.status}`);
     }
 
     const payload = (await response.json()) as BboxResponse;
-    const bbox = payload.bbox;
-    this.bboxCache.set(source.image_url, bbox);
-    return bbox;
-  }
-
-  prefetchFrame(imageUrl: string, signal?: AbortSignal): void {
-    void fetch(imageUrl, { signal }).catch((error: unknown) => {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        return;
-      }
-    });
+    this.bboxCache.set(source.image_url, payload.bbox);
+    return payload.bbox;
   }
 }

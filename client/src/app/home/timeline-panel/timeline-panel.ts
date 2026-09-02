@@ -51,6 +51,7 @@ export class TimelinePanel {
   readonly currentLabel = input('');
 
   readonly indexChange = output<number>();
+  readonly indexCommit = output<number>();
 
   constructor() {
     afterRenderEffect(() => {
@@ -105,6 +106,10 @@ export class TimelinePanel {
 
   onSliderInput(index: number): void {
     this.indexChange.emit(index);
+  }
+
+  onSliderCommit(index: number): void {
+    this.indexCommit.emit(index);
   }
 
   private bindSliderTrack(): void {

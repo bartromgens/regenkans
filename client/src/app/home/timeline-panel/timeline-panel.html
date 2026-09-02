@@ -47,6 +47,7 @@
           matSliderThumb
           [value]="selectedIndex()"
           (input)="onSliderInput(+$any($event.target).value)"
+          (dragEnd)="onSliderCommit($event.value)"
         />
       </mat-slider>
 

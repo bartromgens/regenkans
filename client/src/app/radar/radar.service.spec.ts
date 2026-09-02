@@ -30,29 +30,38 @@ describe('RadarService', () => {
     vi.unstubAllGlobals();
   });
 
-  it('resolveBbox fetches bbox_url and forwards the abort signal', async () => {
-    const controller = new AbortController();
-    fetchMock.mockResolvedValue({
+  it('resolveBbox deduplicates concurrent requests for the same bbox_url', async () => {
+    let resolveFetch: (value: unknown) => void = () => undefined;
+    fetchMock.mockReturnValue(
+      new Promise((resolve) => {
+        resolveFetch = resolve;
+      }),
+    );
+
+    const first = service.resolveBbox(source);
+    const second = service.resolveBbox(source);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(source.bbox_url);
+
+    resolveFetch({
       ok: true,
       json: async () => ({ bbox: [3, 50, 7, 54] }),
     });
 
-    const bbox = await service.resolveBbox(source, controller.signal);
-
-    expect(bbox).toEqual([3, 50, 7, 54]);
-    expect(fetchMock).toHaveBeenCalledWith(source.bbox_url, {
-      signal: controller.signal,
-    });
+    const [bboxA, bboxB] = await Promise.all([first, second]);
+    expect(bboxA).toEqual([3, 50, 7, 54]);
+    expect(bboxB).toEqual([3, 50, 7, 54]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('prefetchFrame forwards the abort signal to fetch', () => {
-    const controller = new AbortController();
+  it('prefetchFrame deduplicates requests for the same image_url', () => {
     fetchMock.mockResolvedValue({ ok: true });
 
-    service.prefetchFrame(source.image_url, controller.signal);
+    service.prefetchFrame(source.image_url);
+    service.prefetchFrame(source.image_url);
 
-    expect(fetchMock).toHaveBeenCalledWith(source.image_url, {
-      signal: controller.signal,
-    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(source.image_url);
   });
 });
