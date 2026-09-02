@@ -435,3 +435,35 @@ class RadarPointApiTests(TestCase):
         payload = response.json()
         self.assertTrue(all(point["intensity"] is None for point in payload["points"]))
         self.assertTrue(all(point["probability"] is None for point in payload["points"]))
+
+    def test_point_endpoint_future_hours_limits_future_slots(self):
+        radar_issued = self._seed_timeline_data()
+
+        full_response = self.client.get(
+            reverse("radar-point"),
+            {"lat": self.WET_LAT, "lng": self.WET_LNG, "hours": 1},
+        )
+        capped_response = self.client.get(
+            reverse("radar-point"),
+            {
+                "lat": self.WET_LAT,
+                "lng": self.WET_LNG,
+                "hours": 1,
+                "future_hours": 2,
+            },
+        )
+
+        self.assertEqual(full_response.status_code, 200)
+        self.assertEqual(capped_response.status_code, 200)
+
+        full_payload = full_response.json()
+        capped_payload = capped_response.json()
+        future_cutoff = radar_issued + timedelta(hours=2)
+
+        self.assertLess(len(capped_payload["points"]), len(full_payload["points"]))
+        self.assertTrue(
+            all(
+                datetime.fromisoformat(point["valid_at"]) <= future_cutoff
+                for point in capped_payload["points"]
+            )
+        )

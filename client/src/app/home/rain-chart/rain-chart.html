@@ -21,9 +21,15 @@
             type="button"
             class="rain-chart-window-toggle__button"
             [class.rain-chart-window-toggle__button--active]="extendedWindow()"
+            [class.rain-chart-window-toggle__button--busy]="extending()"
+            [disabled]="extending()"
             (click)="setWindow(true)"
           >
-            {{ hours }}u
+            @if (extending()) {
+              …
+            } @else {
+              {{ hours }}u
+            }
           </button>
         </div>
       }

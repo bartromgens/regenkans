@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 
 import h5py
@@ -49,8 +50,17 @@ class PointSample:
     expected: float | None
 
 
-def build_point_series(lat: float, lng: float, *, hours: int = 24) -> dict:
+def build_point_series(
+    lat: float,
+    lng: float,
+    *,
+    hours: int = 24,
+    future_hours: int | None = None,
+) -> dict:
     now, slots, _ = build_unified_timeline(hours=hours)
+    if future_hours is not None and now is not None:
+        future_cutoff = now + timedelta(hours=future_hours)
+        slots = [slot for slot in slots if slot.valid_at <= future_cutoff]
     radar_samplers: dict[str, _RadarFileSampler] = {}
     ensemble_sampler: _EnsemblePointSampler | None = None
     points: list[PointSample] = []

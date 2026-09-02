@@ -64,6 +64,15 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
 }
 
+.rain-chart-window-toggle__button--busy {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.rain-chart-window-toggle__button:disabled {
+  cursor: wait;
+}
+
 .rain-chart-close {
   border: none;
   background: transparent;

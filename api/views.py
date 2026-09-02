@@ -142,4 +142,8 @@ def radar_point(request):
         )
 
     hours = int(request.query_params.get("hours", 24))
-    return Response(build_point_series(lat, lng, hours=hours))
+    future_hours_param = request.query_params.get("future_hours")
+    future_hours = int(future_hours_param) if future_hours_param is not None else None
+    return Response(
+        build_point_series(lat, lng, hours=hours, future_hours=future_hours)
+    )

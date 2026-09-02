@@ -22,9 +22,13 @@
       [series]="pointSeries()"
       [selectedValidAt]="selectedValidAt()"
       [loading]="pointLoading()"
+      [extending]="pointExtending()"
       [error]="pointError()"
       [locationLabel]="locationLabel()"
+      [maxAvailableHours]="chartMaxAvailableHours()"
+      [extendedWindow]="chartExtendedWindow()"
       (closed)="onChartClosed()"
+      (windowChange)="onChartWindowChange($event)"
     />
   }
 

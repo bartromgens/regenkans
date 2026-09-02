@@ -19,9 +19,14 @@ import { ModeToggle } from './mode-toggle/mode-toggle';
 import { MapLegend } from './map-legend/map-legend';
 import { TimelinePanel } from './timeline-panel/timeline-panel';
 import { MapLocation, RadarMap, RadarOverlay } from './radar-map/radar-map';
-import { RainChart } from './rain-chart/rain-chart';
+import {
+  CHART_WINDOW_AFTER_HOURS,
+  CHART_WINDOW_BEFORE_HOURS,
+  RainChart,
+} from './rain-chart/rain-chart';
 
 const SCRUB_THROTTLE_MS = 150;
+const HOUR_MS = 60 * 60 * 1000;
 
 @Component({
   imports: [ModeToggle, MapLegend, TimelinePanel, RadarMap, RainChart],
@@ -55,8 +60,10 @@ export class Home implements OnInit {
   readonly selectedLocation = signal<MapLocation | null>(null);
   readonly pointSeries = signal<PointSeriesPoint[]>([]);
   readonly pointLoading = signal(false);
+  readonly pointExtending = signal(false);
   readonly pointError = signal<string | null>(null);
   readonly locationLabel = signal('');
+  readonly chartExtendedWindow = signal(false);
 
   ngOnInit(): void {
     this.destroyRef.onDestroy(() => {
@@ -70,15 +77,33 @@ export class Home implements OnInit {
   onMapClick(location: MapLocation): void {
     this.selectedLocation.set(location);
     this.locationLabel.set(this.formatLocation(location));
+    this.chartExtendedWindow.set(false);
     void this.loadPointSeries(location);
   }
 
   onChartClosed(): void {
+    this.pointLoadToken += 1;
     this.selectedLocation.set(null);
     this.pointSeries.set([]);
     this.pointError.set(null);
     this.pointLoading.set(false);
+    this.pointExtending.set(false);
+    this.chartExtendedWindow.set(false);
     this.locationLabel.set('');
+  }
+
+  onChartWindowChange(extended: boolean): void {
+    if (!extended) {
+      this.chartExtendedWindow.set(false);
+      return;
+    }
+
+    const location = this.selectedLocation();
+    if (!location || this.pointExtending() || this.chartExtendedWindow()) {
+      return;
+    }
+
+    void this.loadExtendedPointSeries(location);
   }
 
   onSliderInput(index: number): void {
@@ -378,7 +403,14 @@ export class Home implements OnInit {
 
     try {
       const response = await new Promise<PointSeriesResponse>((resolve, reject) => {
-          this.radarService.getPointSeries(location.lat, location.lng).subscribe({
+        this.radarService
+          .getPointSeries(
+            location.lat,
+            location.lng,
+            CHART_WINDOW_BEFORE_HOURS,
+            CHART_WINDOW_AFTER_HOURS,
+          )
+          .subscribe({
             next: resolve,
             error: reject,
           });
@@ -399,6 +431,63 @@ export class Home implements OnInit {
       }
     }
   }
+
+  private async loadExtendedPointSeries(location: MapLocation): Promise<void> {
+    const token = ++this.pointLoadToken;
+    this.pointExtending.set(true);
+    this.pointError.set(null);
+
+    try {
+      const response = await new Promise<PointSeriesResponse>((resolve, reject) => {
+        this.radarService
+          .getPointSeries(location.lat, location.lng, CHART_WINDOW_BEFORE_HOURS)
+          .subscribe({
+            next: resolve,
+            error: reject,
+          });
+      });
+
+      if (token !== this.pointLoadToken) {
+        return;
+      }
+
+      this.pointSeries.set(response.points);
+      this.chartExtendedWindow.set(true);
+    } catch {
+      // Keep the short series visible; the user can retry the extended toggle.
+    } finally {
+      if (token === this.pointLoadToken) {
+        this.pointExtending.set(false);
+      }
+    }
+  }
+
+  readonly chartMaxAvailableHours = computed(() => {
+    const frames = this.frames();
+    const nowMs = Date.now();
+    let maxProbabilityMs: number | null = null;
+
+    for (const slot of frames) {
+      if (slot.probability === null) {
+        continue;
+      }
+      const timeMs = new Date(slot.valid_at).getTime();
+      if (maxProbabilityMs === null || timeMs > maxProbabilityMs) {
+        maxProbabilityMs = timeMs;
+      }
+    }
+
+    if (maxProbabilityMs === null) {
+      return null;
+    }
+
+    const hoursAhead = (maxProbabilityMs - nowMs) / HOUR_MS;
+    if (hoursAhead <= CHART_WINDOW_AFTER_HOURS + 0.25) {
+      return null;
+    }
+
+    return Math.ceil(hoursAhead);
+  });
 
   readonly selectedValidAt = computed(() => {
     const frames = this.frames();

@@ -4,7 +4,6 @@ import {
   ElementRef,
   OnDestroy,
   afterRenderEffect,
-  computed,
   inject,
   input,
   output,
@@ -36,8 +35,10 @@ Chart.register(
 );
 
 const HOUR_MS = 60 * 60 * 1000;
-const WINDOW_BEFORE_MS = 1 * HOUR_MS;
-const DEFAULT_WINDOW_AFTER_MS = 2 * HOUR_MS;
+export const CHART_WINDOW_BEFORE_HOURS = 1;
+export const CHART_WINDOW_AFTER_HOURS = 2;
+const WINDOW_BEFORE_MS = CHART_WINDOW_BEFORE_HOURS * HOUR_MS;
+const DEFAULT_WINDOW_AFTER_MS = CHART_WINDOW_AFTER_HOURS * HOUR_MS;
 
 interface IntensityBand {
   label: string;
@@ -74,28 +75,14 @@ export class RainChart implements OnDestroy {
   readonly series = input<PointSeriesPoint[]>([]);
   readonly selectedValidAt = input<string | null>(null);
   readonly loading = input(false);
+  readonly extending = input(false);
   readonly error = input<string | null>(null);
   readonly locationLabel = input('');
+  readonly maxAvailableHours = input<number | null>(null);
+  readonly extendedWindow = input(false);
 
   readonly closed = output<void>();
-
-  readonly extendedWindow = signal(false);
-
-  readonly maxAvailableHours = computed(() => {
-    const points = this.series();
-    const nowMs = this.clockMs();
-    const maxProbabilityMs = resolveMaxProbabilityMs(points);
-    if (maxProbabilityMs === null) {
-      return null;
-    }
-
-    const hoursAhead = (maxProbabilityMs - nowMs) / HOUR_MS;
-    if (hoursAhead <= DEFAULT_WINDOW_AFTER_MS / HOUR_MS + 0.25) {
-      return null;
-    }
-
-    return Math.ceil(hoursAhead);
-  });
+  readonly windowChange = output<boolean>();
 
   private chart: Chart | null = null;
 
@@ -123,7 +110,10 @@ export class RainChart implements OnDestroy {
   }
 
   setWindow(extended: boolean): void {
-    this.extendedWindow.set(extended);
+    if (extended === this.extendedWindow()) {
+      return;
+    }
+    this.windowChange.emit(extended);
   }
 
   private renderChart(): void {

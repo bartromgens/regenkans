@@ -72,14 +72,21 @@ export class RadarService {
     });
   }
 
-  getPointSeries(lat: number, lng: number, hours = 24): Observable<PointSeriesResponse> {
-    return this.http.get<PointSeriesResponse>('/api/radar/point/', {
-      params: {
-        lat: String(lat),
-        lng: String(lng),
-        hours: String(hours),
-      },
-    });
+  getPointSeries(
+    lat: number,
+    lng: number,
+    hours = 24,
+    futureHours?: number,
+  ): Observable<PointSeriesResponse> {
+    const params: Record<string, string> = {
+      lat: String(lat),
+      lng: String(lng),
+      hours: String(hours),
+    };
+    if (futureHours !== undefined) {
+      params['future_hours'] = String(futureHours);
+    }
+    return this.http.get<PointSeriesResponse>('/api/radar/point/', { params });
   }
 
   async resolveBbox(source: FrameSource): Promise<[number, number, number, number]> {
