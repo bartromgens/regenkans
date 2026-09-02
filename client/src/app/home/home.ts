@@ -43,7 +43,7 @@ export class Home implements OnInit {
   readonly selectedIndex = signal(0);
   readonly nowIndex = signal(0);
   readonly currentLabel = signal('');
-  readonly mode = signal<OverlayMode>('intensity');
+  readonly mode = signal<OverlayMode>('probability');
   readonly ensembleAvailable = signal(false);
   readonly overlay = signal<RadarOverlay | null>(null);
   readonly selectedLocation = signal<MapLocation | null>(null);
@@ -104,6 +104,9 @@ export class Home implements OnInit {
       });
 
       this.ensembleAvailable.set(timeline.ensemble_available);
+      if (!timeline.ensemble_available) {
+        this.mode.set('intensity');
+      }
       this.frames.set(timeline.frames);
 
       if (timeline.frames.length === 0) {
