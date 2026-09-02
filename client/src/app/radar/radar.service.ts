@@ -9,6 +9,7 @@ export interface FrameSource {
   issued_at: string;
   lead_minutes: number;
   image_url: string;
+  bbox_url: string;
   bbox: [number, number, number, number] | null;
 }
 
@@ -45,6 +46,10 @@ export interface PointSeriesResponse {
   points: PointSeriesPoint[];
 }
 
+interface BboxResponse {
+  bbox: [number, number, number, number];
+}
+
 @Injectable({ providedIn: 'root' })
 export class RadarService {
   private readonly http = inject(HttpClient);
@@ -72,7 +77,10 @@ export class RadarService {
     });
   }
 
-  async resolveBbox(source: FrameSource): Promise<[number, number, number, number]> {
+  async resolveBbox(
+    source: FrameSource,
+    signal?: AbortSignal,
+  ): Promise<[number, number, number, number]> {
     if (source.bbox) {
       this.bboxCache.set(source.image_url, source.bbox);
       return source.bbox;
@@ -83,22 +91,22 @@ export class RadarService {
       return cached;
     }
 
-    const response = await fetch(source.image_url);
+    const response = await fetch(source.bbox_url, { signal });
     if (!response.ok) {
-      throw new Error(`Failed to load radar frame: ${response.status}`);
+      throw new Error(`Failed to load radar frame bbox: ${response.status}`);
     }
 
-    const bboxHeader = response.headers.get('X-Radar-BBox');
-    if (!bboxHeader) {
-      throw new Error('Radar frame response missing X-Radar-BBox header');
-    }
-
-    const bbox = bboxHeader.split(',').map(Number) as [number, number, number, number];
+    const payload = (await response.json()) as BboxResponse;
+    const bbox = payload.bbox;
     this.bboxCache.set(source.image_url, bbox);
     return bbox;
   }
 
-  prefetchFrame(imageUrl: string): void {
-    void fetch(imageUrl).catch(() => undefined);
+  prefetchFrame(imageUrl: string, signal?: AbortSignal): void {
+    void fetch(imageUrl, { signal }).catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+    });
   }
 }

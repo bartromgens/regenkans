@@ -12,14 +12,29 @@ urlpatterns = [
         name="radar-frame",
     ),
     path(
+        "radar/frames/<str:filename>/<int:lead_minutes>.bbox",
+        views.radar_frame_bbox,
+        name="radar-frame-bbox",
+    ),
+    path(
         "ensemble/frames/<str:filename>/<int:lead_minutes>.png",
         views.ensemble_frame,
         name="ensemble-frame",
     ),
     path(
+        "ensemble/frames/<str:filename>/<int:lead_minutes>.bbox",
+        views.ensemble_frame_bbox,
+        name="ensemble-frame-bbox",
+    ),
+    path(
         "ensemble/expected/frames/<str:filename>/<int:lead_minutes>.png",
         views.ensemble_expected_frame,
         name="ensemble-expected-frame",
+    ),
+    path(
+        "ensemble/expected/frames/<str:filename>/<int:lead_minutes>.bbox",
+        views.ensemble_expected_frame_bbox,
+        name="ensemble-expected-frame-bbox",
     ),
     path("radar/point/", views.radar_point, name="radar-point"),
 ]

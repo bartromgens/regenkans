@@ -20,6 +20,7 @@ class FrameSource:
     issued_at: datetime
     lead_minutes: int
     image_url: str
+    bbox_url: str
     bbox: tuple[float, float, float, float] | None = None
 
 
@@ -169,6 +170,7 @@ def _serialize_source(source: FrameSource | None) -> dict | None:
         "issued_at": source.issued_at.isoformat(),
         "lead_minutes": source.lead_minutes,
         "image_url": source.image_url,
+        "bbox_url": source.bbox_url,
         "bbox": list(source.bbox) if source.bbox is not None else None,
     }
 
@@ -181,6 +183,7 @@ def _intensity_source(
         issued_at=forecast.issued_at,
         lead_minutes=lead_minutes,
         image_url=f"/api/radar/frames/{forecast.filename}/{lead_minutes}.png",
+        bbox_url=f"/api/radar/frames/{forecast.filename}/{lead_minutes}.bbox",
         bbox=_cached_intensity_bbox(forecast.filename, lead_minutes),
     )
 
@@ -193,6 +196,7 @@ def _probability_source(
         issued_at=forecast.issued_at,
         lead_minutes=lead_minutes,
         image_url=f"/api/ensemble/frames/{forecast.filename}/{lead_minutes}.png",
+        bbox_url=f"/api/ensemble/frames/{forecast.filename}/{lead_minutes}.bbox",
         bbox=_cached_probability_bbox(forecast.filename, lead_minutes),
     )
 
@@ -205,6 +209,7 @@ def _expected_source(
         issued_at=forecast.issued_at,
         lead_minutes=lead_minutes,
         image_url=f"/api/ensemble/expected/frames/{forecast.filename}/{lead_minutes}.png",
+        bbox_url=f"/api/ensemble/expected/frames/{forecast.filename}/{lead_minutes}.bbox",
         bbox=_cached_expected_bbox(forecast.filename, lead_minutes),
     )
 

@@ -83,6 +83,63 @@ class RadarApiTests(TestCase):
         self.assertEqual(response["Content-Type"], "image/png")
         self.assertIn("X-Radar-BBox", response)
 
+    def test_radar_frame_bbox_endpoint_returns_json(self):
+        path = create_sample_radar_forecast_h5(
+            self.data_dir / "RAD_NL25_RAC_FM_202608301445.h5",
+            step_count=3,
+        )
+        issued_at = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
+        forecast = RadarForecast.objects.create(
+            filename=path.name,
+            issued_at=issued_at,
+            file_path=str(path),
+            status=RadarForecast.Status.PARSED,
+            rows=700,
+            cols=765,
+        )
+        RadarForecastStep.objects.create(
+            forecast=forecast,
+            image_name="image1",
+            lead_minutes=0,
+            valid_at=issued_at,
+        )
+
+        response = self.client.get(
+            reverse("radar-frame-bbox", args=[path.name, 0]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["bbox"]), 4)
+        self.assertTrue(all(isinstance(value, float) for value in payload["bbox"]))
+
+    def test_radar_frame_bbox_endpoint_returns_404_for_unknown_step(self):
+        path = create_sample_radar_forecast_h5(
+            self.data_dir / "RAD_NL25_RAC_FM_202608301445.h5",
+            step_count=3,
+        )
+        issued_at = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
+        forecast = RadarForecast.objects.create(
+            filename=path.name,
+            issued_at=issued_at,
+            file_path=str(path),
+            status=RadarForecast.Status.PARSED,
+            rows=700,
+            cols=765,
+        )
+        RadarForecastStep.objects.create(
+            forecast=forecast,
+            image_name="image1",
+            lead_minutes=0,
+            valid_at=issued_at,
+        )
+
+        response = self.client.get(
+            reverse("radar-frame-bbox", args=[path.name, 999]),
+        )
+
+        self.assertEqual(response.status_code, 404)
+
 
 @override_settings(
     KNMI_RADAR_FORECAST_DATA_DIR=Path("/tmp/regenkans-api-radar"),
@@ -207,6 +264,30 @@ class EnsembleApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response["Content-Type"], "image/png")
         self.assertIn("X-Radar-BBox", response)
+
+    def test_ensemble_frame_bbox_endpoint_returns_json(self):
+        ensemble, _ = self._seed_radar_and_ensemble(aligned=False)
+
+        response = self.client.get(
+            reverse("ensemble-frame-bbox", args=[ensemble.filename, 5]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["bbox"]), 4)
+        self.assertTrue(all(isinstance(value, float) for value in payload["bbox"]))
+
+    def test_ensemble_expected_frame_bbox_endpoint_returns_json(self):
+        ensemble, _ = self._seed_radar_and_ensemble(aligned=False)
+
+        response = self.client.get(
+            reverse("ensemble-expected-frame-bbox", args=[ensemble.filename, 5]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(len(payload["bbox"]), 4)
+        self.assertTrue(all(isinstance(value, float) for value in payload["bbox"]))
 
     def test_ensemble_frame_endpoint_accepts_live_filename_and_lead(self):
         filename = "KNMI_PYSTEPS_BLEND_ENS_202608301755.nc"

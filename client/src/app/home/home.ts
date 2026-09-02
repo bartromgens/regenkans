@@ -32,6 +32,7 @@ export class Home implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private frameLoadToken = 0;
   private pointLoadToken = 0;
+  private frameAbortController: AbortController | null = null;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
   private sharedBbox: [number, number, number, number] | null = null;
   private sharedBboxImageUrl: string | null = null;
@@ -202,6 +203,10 @@ export class Home implements OnInit {
   }
 
   private async showFrame(index: number): Promise<void> {
+    this.frameAbortController?.abort();
+    const abortController = new AbortController();
+    this.frameAbortController = abortController;
+
     const timelineFrames = this.frames();
     const slot = timelineFrames[index];
     if (!slot) {
@@ -209,7 +214,7 @@ export class Home implements OnInit {
     }
 
     this.currentLabel.set(this.formatValidAt(slot.valid_at));
-    this.prefetchAround(index, timelineFrames);
+    this.prefetchAround(index, timelineFrames, abortController.signal);
 
     const source = this.sourceForMode(slot);
     if (!source) {
@@ -225,7 +230,7 @@ export class Home implements OnInit {
         this.sharedBbox !== null && this.sharedBboxImageUrl === source.image_url;
       const bbox = canReuseBbox
         ? this.sharedBbox!
-        : source.bbox ?? await this.radarService.resolveBbox(source);
+        : source.bbox ?? await this.radarService.resolveBbox(source, abortController.signal);
       if (token !== this.frameLoadToken) {
         return;
       }
@@ -233,7 +238,10 @@ export class Home implements OnInit {
       this.sharedBbox = bbox;
       this.sharedBboxImageUrl = source.image_url;
       this.overlay.set({ imageUrl: source.image_url, bbox });
-    } catch {
+    } catch (error: unknown) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
       if (token === this.frameLoadToken) {
         this.frameError.set('Kan radarbeeld niet laden.');
       }
@@ -243,6 +251,7 @@ export class Home implements OnInit {
   private prefetchAround(
     index: number,
     timelineFrames: TimelineSlot[],
+    signal: AbortSignal,
   ): void {
     for (let offset = -3; offset <= 3; offset++) {
       const neighbor = timelineFrames[index + offset];
@@ -251,7 +260,7 @@ export class Home implements OnInit {
       }
       const source = this.sourceForMode(neighbor);
       if (source) {
-        this.radarService.prefetchFrame(source.image_url);
+        this.radarService.prefetchFrame(source.image_url, signal);
       }
     }
   }

@@ -12,6 +12,44 @@ from radar.render import render_forecast_frame
 from radar.timeline import serialize_probability_timeline, serialize_timeline
 
 
+def _resolve_radar_step(filename: str, lead_minutes: int) -> RadarForecast:
+    forecast = RadarForecast.objects.filter(
+        filename=filename,
+        status=RadarForecast.Status.PARSED,
+    ).first()
+    if forecast is None:
+        raise Http404("Verwachting niet gevonden")
+
+    if not forecast.steps.filter(lead_minutes=lead_minutes).exists():
+        raise Http404("Verwachtingsstap niet gevonden")
+
+    return forecast
+
+
+def _resolve_ensemble_step(filename: str, lead_minutes: int) -> EnsembleForecast:
+    forecast = EnsembleForecast.objects.filter(
+        filename=filename,
+        status=EnsembleForecast.Status.PARSED,
+    ).first()
+    if forecast is None:
+        raise Http404("Ensembleverwachting niet gevonden")
+
+    if not forecast.steps.filter(lead_minutes=lead_minutes).exists():
+        raise Http404("Ensembleverwachtingsstap niet gevonden")
+
+    return forecast
+
+
+def _frame_png_response(rendered) -> FileResponse:
+    west, south, east, north = rendered.bbox
+    response = FileResponse(rendered.path.open("rb"), content_type="image/png")
+    response["Cache-Control"] = "public, max-age=300"
+    response["X-Radar-BBox"] = f"{west},{south},{east},{north}"
+    response["Access-Control-Expose-Headers"] = "X-Radar-BBox"
+    response["Last-Modified"] = http_date(rendered.path.stat().st_mtime)
+    return response
+
+
 @api_view(["GET"])
 def health_check(request):
     return Response({"status": "ok"})
@@ -31,74 +69,54 @@ def ensemble_timeline(request):
 
 @api_view(["GET"])
 def radar_frame(request, filename: str, lead_minutes: int):
-    forecast = RadarForecast.objects.filter(
-        filename=filename,
-        status=RadarForecast.Status.PARSED,
-    ).first()
-    if forecast is None:
-        raise Http404("Verwachting niet gevonden")
-
-    if not forecast.steps.filter(lead_minutes=lead_minutes).exists():
-        raise Http404("Verwachtingsstap niet gevonden")
+    forecast = _resolve_radar_step(filename, lead_minutes)
 
     try:
         rendered = render_forecast_frame(forecast, lead_minutes)
     except (ValueError, OSError) as exc:
         raise Http404(str(exc)) from exc
 
-    west, south, east, north = rendered.bbox
-    response = FileResponse(rendered.path.open("rb"), content_type="image/png")
-    response["Cache-Control"] = "public, max-age=300"
-    response["X-Radar-BBox"] = f"{west},{south},{east},{north}"
-    response["Access-Control-Expose-Headers"] = "X-Radar-BBox"
-    response["Last-Modified"] = http_date(rendered.path.stat().st_mtime)
-    return response
+    return _frame_png_response(rendered)
+
+
+@api_view(["GET"])
+def radar_frame_bbox(request, filename: str, lead_minutes: int):
+    forecast = _resolve_radar_step(filename, lead_minutes)
+
+    try:
+        rendered = render_forecast_frame(forecast, lead_minutes)
+    except (ValueError, OSError) as exc:
+        raise Http404(str(exc)) from exc
+
+    return Response({"bbox": list(rendered.bbox)})
 
 
 @api_view(["GET"])
 def ensemble_frame(request, filename: str, lead_minutes: int):
-    forecast = EnsembleForecast.objects.filter(
-        filename=filename,
-        status=EnsembleForecast.Status.PARSED,
-    ).first()
-    if forecast is None:
-        raise Http404("Ensembleverwachting niet gevonden")
-
-    if not forecast.steps.filter(lead_minutes=lead_minutes).exists():
-        raise Http404("Ensembleverwachtingsstap niet gevonden")
-
+    forecast = _resolve_ensemble_step(filename, lead_minutes)
     rendered = render_probability_frame(forecast, lead_minutes)
+    return _frame_png_response(rendered)
 
-    west, south, east, north = rendered.bbox
-    response = FileResponse(rendered.path.open("rb"), content_type="image/png")
-    response["Cache-Control"] = "public, max-age=300"
-    response["X-Radar-BBox"] = f"{west},{south},{east},{north}"
-    response["Access-Control-Expose-Headers"] = "X-Radar-BBox"
-    response["Last-Modified"] = http_date(rendered.path.stat().st_mtime)
-    return response
+
+@api_view(["GET"])
+def ensemble_frame_bbox(request, filename: str, lead_minutes: int):
+    forecast = _resolve_ensemble_step(filename, lead_minutes)
+    rendered = render_probability_frame(forecast, lead_minutes)
+    return Response({"bbox": list(rendered.bbox)})
 
 
 @api_view(["GET"])
 def ensemble_expected_frame(request, filename: str, lead_minutes: int):
-    forecast = EnsembleForecast.objects.filter(
-        filename=filename,
-        status=EnsembleForecast.Status.PARSED,
-    ).first()
-    if forecast is None:
-        raise Http404("Ensembleverwachting niet gevonden")
-
-    if not forecast.steps.filter(lead_minutes=lead_minutes).exists():
-        raise Http404("Ensembleverwachtingsstap niet gevonden")
-
+    forecast = _resolve_ensemble_step(filename, lead_minutes)
     rendered = render_expected_frame(forecast, lead_minutes)
+    return _frame_png_response(rendered)
 
-    west, south, east, north = rendered.bbox
-    response = FileResponse(rendered.path.open("rb"), content_type="image/png")
-    response["Cache-Control"] = "public, max-age=300"
-    response["X-Radar-BBox"] = f"{west},{south},{east},{north}"
-    response["Access-Control-Expose-Headers"] = "X-Radar-BBox"
-    response["Last-Modified"] = http_date(rendered.path.stat().st_mtime)
-    return response
+
+@api_view(["GET"])
+def ensemble_expected_frame_bbox(request, filename: str, lead_minutes: int):
+    forecast = _resolve_ensemble_step(filename, lead_minutes)
+    rendered = render_expected_frame(forecast, lead_minutes)
+    return Response({"bbox": list(rendered.bbox)})
 
 
 @api_view(["GET"])
