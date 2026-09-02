@@ -39,6 +39,28 @@ const HOUR_MS = 60 * 60 * 1000;
 const WINDOW_BEFORE_MS = 1 * HOUR_MS;
 const DEFAULT_WINDOW_AFTER_MS = 2 * HOUR_MS;
 
+interface IntensityBand {
+  label: string;
+  min: number;
+  max: number | null;
+  color: string;
+}
+
+// Hues follow the map colormap in radar/render.py so the chart and the map
+// legend read as the same scale. Neighbouring bands need a clear hue step, not
+// just a darker tint: at the default axis maximum only the lightest two are in
+// view, so those two have to be told apart on their own.
+const INTENSITY_BANDS: readonly IntensityBand[] = [
+  { label: 'miezer', min: 0.1, max: 1, color: 'rgba(186, 230, 253, 0.55)' },
+  { label: 'regen', min: 1, max: 5, color: 'rgba(96, 165, 250, 0.35)' },
+  { label: 'flinke regen', min: 5, max: 10, color: 'rgba(167, 139, 250, 0.38)' },
+  { label: 'stortregen', min: 10, max: 25, color: 'rgba(248, 113, 113, 0.38)' },
+  { label: 'wolkbreuk', min: 25, max: null, color: 'rgba(251, 146, 60, 0.45)' },
+];
+
+const BAND_BORDER_COLOR = 'rgba(100, 116, 139, 0.35)';
+const BAND_LABEL_MIN_HEIGHT_PX = 15;
+
 @Component({
   selector: 'app-rain-chart',
   styleUrl: './rain-chart.scss',
@@ -253,6 +275,7 @@ export class RainChart implements OnDestroy {
               text: 'mm/u',
             },
             beginAtZero: true,
+            suggestedMax: 2.5,
           },
           y1: {
             type: 'linear',
@@ -323,6 +346,63 @@ function formatChartTime(
   }).format(new Date(timeMs));
 }
 
+function buildIntensityBands() {
+  return Object.fromEntries(
+    INTENSITY_BANDS.map(
+      (band, index) =>
+        [
+          `intensityBand${index}`,
+          {
+            type: 'box' as const,
+            yScaleID: 'y',
+            // Annotations are drawn unclipped so the "Nu" label can sit above
+            // the plot, which means a band reaching past the axis maximum would
+            // paint over it. Clamping keeps every band inside the plot area.
+            yMin: (ctx: { chart: Chart }) => clampToAxis(ctx.chart, band.min),
+            yMax: (ctx: { chart: Chart }) => clampToAxis(ctx.chart, band.max),
+            adjustScaleRange: false,
+            backgroundColor: band.color,
+            borderColor: BAND_BORDER_COLOR,
+            // A band above the axis maximum collapses onto it, where a border
+            // would leave a stray line along the top of the plot.
+            borderWidth: (ctx: { chart: Chart }) =>
+              bandHeightPx(ctx.chart, band) < 1 ? 0 : 1,
+            drawTime: 'beforeDatasetsDraw' as const,
+            label: {
+              display: (ctx: { chart: Chart }) =>
+                bandHeightPx(ctx.chart, band) >= BAND_LABEL_MIN_HEIGHT_PX,
+              content: band.label,
+              position: {
+                x: 'start' as const,
+                y: 'center' as const,
+              },
+              xAdjust: 6,
+              color: '#64748b',
+              font: {
+                size: 10,
+              },
+            },
+          },
+        ] as const,
+    ),
+  );
+}
+
+function clampToAxis(chart: Chart, value: number | null): number {
+  const axisMax = chart.scales['y']?.max ?? 0;
+  return value === null ? axisMax : Math.min(value, axisMax);
+}
+
+function bandHeightPx(chart: Chart, band: IntensityBand): number {
+  const axis = chart.scales['y'];
+  if (!axis) {
+    return 0;
+  }
+  const top = axis.getPixelForValue(clampToAxis(chart, band.max));
+  const bottom = axis.getPixelForValue(clampToAxis(chart, band.min));
+  return bottom - top;
+}
+
 function buildAnnotations(
   selectedMs: number | null,
   nowMs: number | null,
@@ -330,6 +410,7 @@ function buildAnnotations(
   return {
     clip: false,
     annotations: {
+      ...buildIntensityBands(),
       ...(nowMs === null
         ? {}
         : {
