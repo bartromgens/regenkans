@@ -393,6 +393,33 @@ function clampToAxis(chart: Chart, value: number | null): number {
   return value === null ? axisMax : Math.min(value, axisMax);
 }
 
+const SELECTED_LABEL_MIN_GAP_PX = 40;
+
+function selectedLabelXAdjust(
+  chart: Chart,
+  selectedMs: number,
+  nowMs: number | null,
+): number {
+  if (nowMs === null) {
+    return 0;
+  }
+
+  const xScale = chart.scales['x'];
+  if (!xScale) {
+    return 0;
+  }
+
+  const selectedPx = xScale.getPixelForValue(selectedMs);
+  const nowPx = xScale.getPixelForValue(nowMs);
+  const gap = selectedPx - nowPx;
+  if (Math.abs(gap) >= SELECTED_LABEL_MIN_GAP_PX) {
+    return 0;
+  }
+
+  const direction = gap >= 0 ? 1 : -1;
+  return direction * (SELECTED_LABEL_MIN_GAP_PX - Math.abs(gap));
+}
+
 function bandHeightPx(chart: Chart, band: IntensityBand): number {
   const axis = chart.scales['y'];
   if (!axis) {
@@ -456,6 +483,35 @@ function buildAnnotations(
               borderColor: '#64748b',
               borderWidth: 1,
               borderDash: [4, 4],
+            },
+            selectedLabel: {
+              type: 'label' as const,
+              xValue: selectedMs,
+              xScaleID: 'x',
+              yValue: (ctx: { chart: Chart }) => ctx.chart.scales['y']?.max ?? 0,
+              yScaleID: 'y',
+              content: formatChartTime(selectedMs, {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              position: {
+                x: 'center' as const,
+                y: 'end' as const,
+              },
+              xAdjust: (ctx: { chart: Chart }) =>
+                selectedLabelXAdjust(ctx.chart, selectedMs, nowMs),
+              yAdjust: -4,
+              backgroundColor: '#64748b',
+              color: '#ffffff',
+              borderRadius: 4,
+              font: {
+                size: 10,
+                weight: 600,
+              },
+              padding: {
+                x: 6,
+                y: 2,
+              },
             },
           }),
     },
