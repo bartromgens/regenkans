@@ -73,6 +73,21 @@ export class RadarMap implements OnInit, OnDestroy {
     });
 
     this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    const geolocateControl = new maplibregl.GeolocateControl({
+      positionOptions: { enableHighAccuracy: true },
+      trackUserLocation: false,
+      showAccuracyCircle: false,
+      fitBoundsOptions: { maxZoom: 10 },
+    });
+    this.map.addControl(geolocateControl, 'top-right');
+    geolocateControl.on('geolocate', (position: GeolocationPosition) => {
+      this.locationClick.emit({
+        lng: position.coords.longitude,
+        lat: position.coords.latitude,
+      });
+    });
+
     this.map.on('click', (event) => {
       this.locationClick.emit({
         lng: event.lngLat.lng,

@@ -184,8 +184,12 @@ class ProbabilityTimelineTests(TestCase):
         self.assertEqual(first_forecast.kind, "forecast")
         self.assertIsNotNone(first_forecast.intensity)
         self.assertIsNotNone(first_forecast.probability)
+        self.assertIsNotNone(first_forecast.expected)
         self.assertTrue(
             first_forecast.probability.image_url.startswith("/api/ensemble/frames/")
+        )
+        self.assertTrue(
+            first_forecast.expected.image_url.startswith("/api/ensemble/expected/frames/")
         )
 
     def test_far_future_slots_have_probability_only(self):
@@ -199,6 +203,7 @@ class ProbabilityTimelineTests(TestCase):
         self.assertTrue(far_future)
         self.assertTrue(all(slot.intensity is None for slot in far_future))
         self.assertTrue(all(slot.probability is not None for slot in far_future))
+        self.assertTrue(all(slot.expected is not None for slot in far_future))
 
     def test_stale_ensemble_steps_are_not_included(self):
         radar_path = create_sample_radar_forecast_h5(

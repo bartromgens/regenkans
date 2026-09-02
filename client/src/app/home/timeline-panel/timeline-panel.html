@@ -14,7 +14,8 @@
       <span
         class="timeline-kind"
         [class.timeline-kind--forecast]="
-          frames()[selectedIndex()]?.kind === 'forecast'
+          frames()[selectedIndex()]?.kind === 'forecast' &&
+          selectedIndex() !== nowIndex()
         "
         [class.timeline-kind--now]="selectedIndex() === nowIndex()"
       >

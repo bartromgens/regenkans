@@ -6,6 +6,7 @@ from typing import Literal
 
 from django.utils import timezone
 
+from radar.expected import expected_frame_cache_path
 from radar.models import EnsembleForecast, RadarForecast
 from radar.probability import probability_frame_cache_path
 from radar.render import frame_cache_path, read_cached_bbox
@@ -28,6 +29,7 @@ class TimelineSlot:
     kind: FrameKind
     intensity: FrameSource | None = None
     probability: FrameSource | None = None
+    expected: FrameSource | None = None
 
 
 def build_unified_timeline(
@@ -101,9 +103,11 @@ def build_unified_timeline(
             intensity = _intensity_source(forecast, lead_minutes)
 
         probability = None
+        expected = None
         if valid_at in ensemble_future_steps:
             forecast, lead_minutes = ensemble_future_steps[valid_at]
             probability = _probability_source(forecast, lead_minutes)
+            expected = _expected_source(forecast, lead_minutes)
 
         slots.append(
             TimelineSlot(
@@ -111,6 +115,7 @@ def build_unified_timeline(
                 kind="forecast",
                 intensity=intensity,
                 probability=probability,
+                expected=expected,
             )
         )
 
@@ -153,6 +158,7 @@ def _serialize_slot(slot: TimelineSlot) -> dict:
         "kind": slot.kind,
         "intensity": _serialize_source(slot.intensity),
         "probability": _serialize_source(slot.probability),
+        "expected": _serialize_source(slot.expected),
     }
 
 
@@ -191,6 +197,18 @@ def _probability_source(
     )
 
 
+def _expected_source(
+    forecast: EnsembleForecast,
+    lead_minutes: int,
+) -> FrameSource:
+    return FrameSource(
+        issued_at=forecast.issued_at,
+        lead_minutes=lead_minutes,
+        image_url=f"/api/ensemble/expected/frames/{forecast.filename}/{lead_minutes}.png",
+        bbox=_cached_expected_bbox(forecast.filename, lead_minutes),
+    )
+
+
 def _step_for_lead(forecast: RadarForecast, lead_minutes: int):
     for step in forecast.steps.all():
         if step.lead_minutes == lead_minutes:
@@ -214,6 +232,17 @@ def _cached_probability_bbox(
     lead_minutes: int,
 ) -> tuple[float, float, float, float] | None:
     cache_path = probability_frame_cache_path(filename, lead_minutes)
+    sidecar = cache_path.with_suffix(".bbox")
+    if not sidecar.exists():
+        return None
+    return read_cached_bbox(cache_path)
+
+
+def _cached_expected_bbox(
+    filename: str,
+    lead_minutes: int,
+) -> tuple[float, float, float, float] | None:
+    cache_path = expected_frame_cache_path(filename, lead_minutes)
     sidecar = cache_path.with_suffix(".bbox")
     if not sidecar.exists():
         return None

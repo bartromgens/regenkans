@@ -50,14 +50,14 @@
   color: #475569;
 }
 
-.timeline-kind--now {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
 .timeline-kind--forecast {
   background: #fce7f3;
   color: #be185d;
+}
+
+.timeline-kind--now {
+  background: #dcfce7;
+  color: #16a34a;
 }
 
 .timeline-frame-error {
@@ -103,7 +103,7 @@
   height: 16px;
   transform: translate(-50%, -50%);
   border-radius: 1px;
-  background: #1d4ed8;
+  background: #16a34a;
 }
 
 .timeline-now-mark__label {
@@ -115,7 +115,7 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #1d4ed8;
+  color: #16a34a;
 }
 
 .timeline-now-mark[data-edge='start'] .timeline-now-mark__label {

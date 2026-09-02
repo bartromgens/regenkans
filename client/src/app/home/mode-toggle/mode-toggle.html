@@ -17,6 +17,15 @@
     >
       Kans
     </button>
+    <button
+      type="button"
+      class="mode-toggle__button"
+      [class.mode-toggle__button--active]="mode() === 'expected'"
+      [disabled]="!ensembleAvailable()"
+      (click)="selectMode('expected')"
+    >
+      Verwacht
+    </button>
   </div>
 
   @if (!ensembleAvailable()) {

@@ -148,6 +148,57 @@ def read_probability_of_precipitation(
     return pop, grid
 
 
+def read_expected_precipitation(
+    path: Path | str,
+    lead_minutes: int,
+) -> tuple[np.ndarray, EnsembleGridInfo]:
+    """Return ensemble-mean precipitation intensity grid for one lead time."""
+    file_path = Path(path)
+    issued_at = parse_ensemble_filename_issued_at(file_path.name)
+
+    with netCDF4.Dataset(file_path, "r") as dataset:
+        data_var = _find_precipitation_variable(dataset)
+        member_dim = _find_member_dimension(data_var)
+        time_dim = _find_time_dimension(data_var)
+        row_dim, col_dim = _find_spatial_dimensions(data_var)
+        time_index = _time_index_for_lead(dataset, time_dim, issued_at, lead_minutes)
+
+        member_slice = _read_member_slice_at_lead(
+            data_var,
+            time_dim=time_dim,
+            member_dim=member_dim,
+            time_index=time_index,
+        )
+        if np.ma.isMaskedArray(member_slice):
+            members = np.ma.filled(member_slice, np.nan).astype(np.float32)
+        else:
+            members = np.asarray(member_slice, dtype=np.float32)
+        if members.ndim != 3:
+            raise ValueError(
+                f"Expected member slice with 3 dimensions, got shape {members.shape}"
+            )
+
+        valid = np.isfinite(members)
+        expected = np.where(valid.any(axis=0), np.nanmean(members, axis=0), np.nan).astype(
+            np.float32
+        )
+
+        x_coords = _read_spatial_coordinate(dataset, col_dim, len(dataset.dimensions[col_dim]))
+        y_coords = _read_spatial_coordinate(dataset, row_dim, len(dataset.dimensions[row_dim]))
+        geographic = _is_geographic_grid(row_dim, col_dim)
+        proj4 = WGS84_PROJ4 if geographic else _read_proj4(dataset, data_var)
+
+    grid = EnsembleGridInfo(
+        rows=len(y_coords),
+        cols=len(x_coords),
+        proj4=proj4,
+        x_coords_km=tuple(float(value) for value in x_coords),
+        y_coords_km=tuple(float(value) for value in y_coords),
+        geographic=geographic,
+    )
+    return expected, grid
+
+
 def _find_precipitation_variable(dataset: netCDF4.Dataset) -> netCDF4.Variable:
     for name in PRECIP_VAR_CANDIDATES:
         if name in dataset.variables:

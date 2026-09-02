@@ -163,8 +163,14 @@ class EnsembleApiTests(TestCase):
         self.assertIsNone(payload["frames"][0]["probability"])
         self.assertIsNotNone(payload["frames"][1]["intensity"])
         self.assertIsNotNone(payload["frames"][1]["probability"])
+        self.assertIsNotNone(payload["frames"][1]["expected"])
         self.assertTrue(
             payload["frames"][1]["probability"]["image_url"].startswith("/api/ensemble/frames/")
+        )
+        self.assertTrue(
+            payload["frames"][1]["expected"]["image_url"].startswith(
+                "/api/ensemble/expected/frames/"
+            )
         )
 
     def test_both_timeline_endpoints_share_valid_at_sequence(self):
@@ -185,6 +191,17 @@ class EnsembleApiTests(TestCase):
 
         response = self.client.get(
             reverse("ensemble-frame", args=[ensemble.filename, 5]),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "image/png")
+        self.assertIn("X-Radar-BBox", response)
+
+    def test_ensemble_expected_frame_endpoint_renders_png(self):
+        ensemble, _ = self._seed_radar_and_ensemble(aligned=False)
+
+        response = self.client.get(
+            reverse("ensemble-expected-frame", args=[ensemble.filename, 5]),
         )
 
         self.assertEqual(response.status_code, 200)
@@ -307,7 +324,7 @@ class RadarPointApiTests(TestCase):
 
         forecast = next(point for point in payload["points"] if point["kind"] == "forecast")
         self.assertAlmostEqual(forecast["probability"], 0.5)
-        self.assertEqual(forecast["expected"], 0.0)
+        self.assertAlmostEqual(forecast["expected"], 0.1)
 
     def test_point_endpoint_validates_coordinates(self):
         response = self.client.get(reverse("radar-point"))

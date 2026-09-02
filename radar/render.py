@@ -12,6 +12,7 @@ from rasterio.crs import CRS
 from rasterio.transform import from_origin
 from rasterio.warp import Resampling, calculate_default_transform, reproject
 
+from radar.colormap import apply_colormap
 from radar.hdf5 import KNMI_PROJ4_METERS, read_step_array
 from radar.models import RadarForecast
 
@@ -133,29 +134,7 @@ def _warp_and_colormap(
 
 
 def _apply_colormap(values: np.ndarray) -> np.ndarray:
-    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
-    valid = np.isfinite(values) & (values >= MIN_VISIBLE_MM_HR)
-    if not np.any(valid):
-        return rgba
-
-    channel_values = values[valid]
-    for index, (stop, color) in enumerate(COLOR_STOPS):
-        lower = stop
-        upper = COLOR_STOPS[index + 1][0] if index + 1 < len(COLOR_STOPS) else np.inf
-        mask = valid & (values >= lower) & (values < upper)
-        if not np.any(mask):
-            continue
-
-        if np.isfinite(upper):
-            weight = (values[mask] - lower) / (upper - lower)
-            base = np.array(color, dtype=np.float32)
-            next_color = np.array(COLOR_STOPS[index + 1][1], dtype=np.float32)
-            blended = base + (next_color - base) * weight[:, None]
-            rgba[mask] = blended.astype(np.uint8)
-        else:
-            rgba[mask] = color
-
-    return rgba
+    return apply_colormap(values, COLOR_STOPS, min_visible=MIN_VISIBLE_MM_HR)
 
 
 def _bbox_sidecar_path(cache_path: Path) -> Path:

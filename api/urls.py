@@ -16,5 +16,10 @@ urlpatterns = [
         views.ensemble_frame,
         name="ensemble-frame",
     ),
+    path(
+        "ensemble/expected/frames/<str:filename>/<int:lead_minutes>.png",
+        views.ensemble_expected_frame,
+        name="ensemble-expected-frame",
+    ),
     path("radar/point/", views.radar_point, name="radar-point"),
 ]

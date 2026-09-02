@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
 export type FrameKind = 'observed' | 'forecast';
-export type OverlayMode = 'intensity' | 'probability';
+export type OverlayMode = 'intensity' | 'probability' | 'expected';
 
 export interface FrameSource {
   issued_at: string;
@@ -17,6 +17,7 @@ export interface TimelineSlot {
   kind: FrameKind;
   intensity: FrameSource | null;
   probability: FrameSource | null;
+  expected: FrameSource | null;
 }
 
 export interface RadarTimelineResponse {

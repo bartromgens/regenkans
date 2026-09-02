@@ -59,6 +59,7 @@ def build_point_series(lat: float, lng: float, *, hours: int = 24) -> dict:
         for slot in slots:
             intensity = _sample_intensity(slot, lng, lat, radar_samplers)
             probability = None
+            expected = None
             if slot.probability is not None:
                 ensemble_sampler = _ensure_ensemble_sampler(
                     slot.probability.image_url,
@@ -70,10 +71,9 @@ def build_point_series(lat: float, lng: float, *, hours: int = 24) -> dict:
                     probability = ensemble_sampler.probability_at_lead(
                         slot.probability.lead_minutes
                     )
-
-            expected = None
-            if intensity is not None and probability is not None:
-                expected = intensity * probability
+                    expected = ensemble_sampler.expected_at_lead(
+                        slot.probability.lead_minutes
+                    )
 
             points.append(
                 PointSample(
@@ -262,6 +262,45 @@ class _EnsemblePointSampler:
 
         wet_count = np.count_nonzero(valid & (members >= threshold_mm_hr))
         return float(wet_count / len(members))
+
+    def expected_at_lead(self, lead_minutes: int) -> float | None:
+        if self._indices is None:
+            return None
+
+        row, col = self._indices
+        time_index = _time_index_for_lead(
+            self._dataset,
+            self._time_dim,
+            self.issued_at,
+            lead_minutes,
+        )
+
+        index: list[int | slice] = []
+        for dim_name in self._data_var.dimensions:
+            if dim_name == self._time_dim:
+                index.append(time_index)
+            elif dim_name == self._member_dim:
+                index.append(slice(None))
+            elif dim_name == self._row_dim:
+                index.append(row)
+            elif dim_name == self._col_dim:
+                index.append(col)
+            else:
+                index.append(slice(None))
+
+        member_slice = self._data_var[tuple(index)]
+        if np.ma.isMaskedArray(member_slice):
+            members = np.ma.filled(member_slice, np.nan).astype(np.float32)
+        else:
+            members = np.asarray(member_slice, dtype=np.float32)
+        if members.ndim != 1:
+            raise ValueError(f"Expected 1-D member slice, got shape {members.shape}")
+
+        valid = np.isfinite(members)
+        if not np.any(valid):
+            return None
+
+        return float(np.nanmean(members))
 
 
 def _radar_indices(grid: KnmiGridInfo, lng: float, lat: float) -> tuple[int, int] | None:

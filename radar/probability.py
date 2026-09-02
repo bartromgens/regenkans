@@ -10,6 +10,7 @@ from PIL import Image
 from rasterio.crs import CRS
 from rasterio.transform import from_origin
 
+from radar.colormap import apply_colormap
 from radar.models import EnsembleForecast
 from radar.netcdf import EnsembleGridInfo, read_probability_of_precipitation
 from radar.render import read_cached_bbox, warp_to_web_mercator
@@ -116,28 +117,7 @@ def _proj4_in_meters(proj4: str) -> str:
 
 
 def _apply_pop_colormap(values: np.ndarray) -> np.ndarray:
-    rgba = np.zeros((*values.shape, 4), dtype=np.uint8)
-    valid = np.isfinite(values) & (values >= MIN_VISIBLE_POP)
-    if not np.any(valid):
-        return rgba
-
-    for index, (stop, color) in enumerate(POP_COLOR_STOPS):
-        lower = stop
-        upper = POP_COLOR_STOPS[index + 1][0] if index + 1 < len(POP_COLOR_STOPS) else np.inf
-        mask = valid & (values >= lower) & (values < upper)
-        if not np.any(mask):
-            continue
-
-        if np.isfinite(upper):
-            weight = (values[mask] - lower) / (upper - lower)
-            base = np.array(color, dtype=np.float32)
-            next_color = np.array(POP_COLOR_STOPS[index + 1][1], dtype=np.float32)
-            blended = base + (next_color - base) * weight[:, None]
-            rgba[mask] = blended.astype(np.uint8)
-        else:
-            rgba[mask] = color
-
-    return rgba
+    return apply_colormap(values, POP_COLOR_STOPS, min_visible=MIN_VISIBLE_POP)
 
 
 def _bbox_sidecar_path(cache_path: Path) -> Path:

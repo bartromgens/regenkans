@@ -6,9 +6,31 @@
         <div class="rain-chart-location">{{ locationLabel() }}</div>
       }
     </div>
-    <button type="button" class="rain-chart-close" (click)="close()" aria-label="Grafiek sluiten">
-      ×
-    </button>
+    <div class="rain-chart-header-actions">
+      @if (maxAvailableHours(); as hours) {
+        <div class="rain-chart-window-toggle">
+          <button
+            type="button"
+            class="rain-chart-window-toggle__button"
+            [class.rain-chart-window-toggle__button--active]="!extendedWindow()"
+            (click)="setWindow(false)"
+          >
+            2u
+          </button>
+          <button
+            type="button"
+            class="rain-chart-window-toggle__button"
+            [class.rain-chart-window-toggle__button--active]="extendedWindow()"
+            (click)="setWindow(true)"
+          >
+            {{ hours }}u
+          </button>
+        </div>
+      }
+      <button type="button" class="rain-chart-close" (click)="close()" aria-label="Grafiek sluiten">
+        ×
+      </button>
+    </div>
   </div>
 
   @if (loading()) {

@@ -10,7 +10,7 @@ from pyproj import Transformer
 
 from radar.hdf5 import DEFAULT_NODATA_THRESHOLD, KNMI_PROJ4_METERS, pixel_to_mm_hr
 from radar.models import RadarForecast, RadarForecastStep
-from radar.netcdf import read_probability_of_precipitation
+from radar.netcdf import read_expected_precipitation, read_probability_of_precipitation
 from radar.point import _EnsemblePointSampler, _radar_indices
 from radar.tests.fixtures import create_live_ensemble_forecast_nc, create_sample_radar_forecast_h5
 
@@ -268,4 +268,29 @@ class EnsemblePointSamplerScaleTests(SimpleTestCase):
         self.assertAlmostEqual(
             sampler.probability_at_lead(5),
             float(pop[self.WET_ROW, self.WET_COL]),
+        )
+
+    def test_live_format_expected_matches_grid_mean(self):
+        path = create_live_ensemble_forecast_nc(
+            Path(self.tempdir.name) / "KNMI_PYSTEPS_BLEND_ENS_202608301800.nc",
+            step_count=3,
+            member_count=20,
+            wet_member_count=10,
+            issued_at=datetime(2026, 8, 30, 18, 0, tzinfo=timezone.utc),
+        )
+        expected, grid = read_expected_precipitation(path, lead_minutes=5)
+        lat = grid.y_coords_km[self.WET_ROW]
+        lng = grid.x_coords_km[self.WET_COL]
+
+        sampler = _EnsemblePointSampler(path, lng, lat)
+        self.addCleanup(sampler.close)
+
+        self.assertAlmostEqual(sampler.expected_at_lead(5), 0.1)
+        self.assertAlmostEqual(
+            sampler.expected_at_lead(5),
+            float(expected[self.WET_ROW, self.WET_COL]),
+        )
+        self.assertNotEqual(
+            sampler.expected_at_lead(5),
+            sampler.probability_at_lead(5),
         )

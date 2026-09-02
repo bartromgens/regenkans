@@ -13,7 +13,10 @@ export class ModeToggle {
   readonly modeChange = output<OverlayMode>();
 
   selectMode(nextMode: OverlayMode): void {
-    if (nextMode === 'probability' && !this.ensembleAvailable()) {
+    if (
+      (nextMode === 'probability' || nextMode === 'expected') &&
+      !this.ensembleAvailable()
+    ) {
       return;
     }
     this.modeChange.emit(nextMode);

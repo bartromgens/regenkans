@@ -84,6 +84,9 @@ export class Home implements OnInit {
     if (nextMode === 'probability' && !this.ensembleAvailable()) {
       return;
     }
+    if (nextMode === 'expected' && !this.ensembleAvailable()) {
+      return;
+    }
 
     this.mode.set(nextMode);
     this.sharedBbox = null;
@@ -170,6 +173,15 @@ export class Home implements OnInit {
     if (this.mode() === 'intensity') {
       return slot.intensity;
     }
+    if (this.mode() === 'expected') {
+      if (slot.expected) {
+        return slot.expected;
+      }
+      if (slot.kind === 'observed' && slot.intensity) {
+        return slot.intensity;
+      }
+      return null;
+    }
     if (slot.probability) {
       return slot.probability;
     }
@@ -180,9 +192,13 @@ export class Home implements OnInit {
   }
 
   private unavailableMessage(mode: OverlayMode): string {
-    return mode === 'intensity'
-      ? 'Intensiteit niet beschikbaar voor dit tijdstip.'
-      : 'Kans niet beschikbaar voor dit tijdstip.';
+    if (mode === 'intensity') {
+      return 'Intensiteit niet beschikbaar voor dit tijdstip.';
+    }
+    if (mode === 'expected') {
+      return 'Verwachte intensiteit niet beschikbaar voor dit tijdstip.';
+    }
+    return 'Kans niet beschikbaar voor dit tijdstip.';
   }
 
   private async showFrame(index: number): Promise<void> {

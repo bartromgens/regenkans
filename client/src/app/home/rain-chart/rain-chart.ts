@@ -4,6 +4,7 @@ import {
   ElementRef,
   OnDestroy,
   afterRenderEffect,
+  computed,
   inject,
   input,
   output,
@@ -36,7 +37,7 @@ Chart.register(
 
 const HOUR_MS = 60 * 60 * 1000;
 const WINDOW_BEFORE_MS = 1 * HOUR_MS;
-const WINDOW_AFTER_MS = 2 * HOUR_MS;
+const DEFAULT_WINDOW_AFTER_MS = 2 * HOUR_MS;
 
 @Component({
   selector: 'app-rain-chart',
@@ -56,6 +57,24 @@ export class RainChart implements OnDestroy {
 
   readonly closed = output<void>();
 
+  readonly extendedWindow = signal(false);
+
+  readonly maxAvailableHours = computed(() => {
+    const points = this.series();
+    const nowMs = this.clockMs();
+    const maxProbabilityMs = resolveMaxProbabilityMs(points);
+    if (maxProbabilityMs === null) {
+      return null;
+    }
+
+    const hoursAhead = (maxProbabilityMs - nowMs) / HOUR_MS;
+    if (hoursAhead <= DEFAULT_WINDOW_AFTER_MS / HOUR_MS + 0.25) {
+      return null;
+    }
+
+    return Math.ceil(hoursAhead);
+  });
+
   private chart: Chart | null = null;
 
   constructor() {
@@ -68,6 +87,7 @@ export class RainChart implements OnDestroy {
       this.loading();
       this.error();
       this.clockMs();
+      this.extendedWindow();
       this.renderChart();
     });
   }
@@ -78,6 +98,10 @@ export class RainChart implements OnDestroy {
 
   close(): void {
     this.closed.emit();
+  }
+
+  setWindow(extended: boolean): void {
+    this.extendedWindow.set(extended);
   }
 
   private renderChart(): void {
@@ -93,7 +117,11 @@ export class RainChart implements OnDestroy {
 
     const nowMs = this.clockMs();
     const minMs = nowMs - WINDOW_BEFORE_MS;
-    const maxMs = nowMs + WINDOW_AFTER_MS;
+    const maxProbabilityMs = resolveMaxProbabilityMs(points);
+    const maxMs =
+      this.extendedWindow() && maxProbabilityMs !== null
+        ? Math.max(maxProbabilityMs, nowMs + DEFAULT_WINDOW_AFTER_MS)
+        : nowMs + DEFAULT_WINDOW_AFTER_MS;
     const windowed = points.filter((point) => {
       const timeMs = new Date(point.valid_at).getTime();
       return timeMs >= minMs && timeMs <= maxMs;
@@ -246,6 +274,20 @@ export class RainChart implements OnDestroy {
     }
     return selectedMs;
   }
+}
+
+function resolveMaxProbabilityMs(points: PointSeriesPoint[]): number | null {
+  let maxMs: number | null = null;
+  for (const point of points) {
+    if (point.probability === null) {
+      continue;
+    }
+    const timeMs = new Date(point.valid_at).getTime();
+    if (maxMs === null || timeMs > maxMs) {
+      maxMs = timeMs;
+    }
+  }
+  return maxMs;
 }
 
 function toChartPoints(
