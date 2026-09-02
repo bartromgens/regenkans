@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 from django.test import TestCase, override_settings
 from PIL import Image
 from pyproj import Transformer
 
+import radar.render as render_module
 from radar.hdf5 import KNMI_PROJ4_METERS
 from radar.models import RadarForecast, RadarForecastStep
-from radar.render import render_forecast_frame
+from radar.render import frame_cache_path, render_forecast_frame
 from radar.tests.fixtures import create_sample_radar_forecast_h5
 from radar.timeline import build_timeline, build_unified_timeline
 
@@ -105,6 +107,60 @@ class RenderTests(TestCase):
         self.assertTrue(rendered.path.exists())
         self.assertEqual(len(rendered.bbox), 4)
         self.assertTrue(rendered.path.with_suffix(".bbox").exists())
+
+    def test_bbox_sidecar_is_never_missing_while_png_is_visible(self):
+        """Regression test for a request-time race.
+
+        A concurrent request only checks `cache_path.exists()` before
+        reading the `.bbox` sidecar. If the PNG became visible before its
+        sidecar was written, that concurrent request would hit a
+        `FileNotFoundError` (see the traceback that motivated this test).
+        The renderer must make the sidecar file exist *before* the PNG is
+        atomically renamed into its final, externally visible location.
+        """
+        path = create_sample_radar_forecast_h5(
+            self.data_dir / "RAD_NL25_RAC_FM_202608301510.h5",
+            step_count=3,
+        )
+        forecast = RadarForecast.objects.create(
+            filename=path.name,
+            issued_at=datetime(2026, 8, 30, 15, 10, tzinfo=timezone.utc),
+            file_path=str(path),
+            status=RadarForecast.Status.PARSED,
+            rows=700,
+            cols=765,
+        )
+        RadarForecastStep.objects.create(
+            forecast=forecast,
+            image_name="image1",
+            lead_minutes=0,
+            valid_at=forecast.issued_at,
+        )
+
+        # Make sure this test always exercises a fresh render, even on a
+        # rerun where a previous pass already populated the on-disk cache.
+        cache_path = frame_cache_path(forecast.filename, 0)
+        cache_path.unlink(missing_ok=True)
+        cache_path.with_suffix(".bbox").unlink(missing_ok=True)
+
+        observed_png_replace = False
+        real_replace = render_module.os.replace
+
+        def spying_replace(src, dst):
+            nonlocal observed_png_replace
+            dst_path = Path(dst)
+            if dst_path.suffix == ".png":
+                observed_png_replace = True
+                self.assertTrue(
+                    dst_path.with_suffix(".bbox").exists(),
+                    "PNG became visible before its .bbox sidecar existed",
+                )
+            return real_replace(src, dst)
+
+        with patch.object(render_module.os, "replace", side_effect=spying_replace):
+            render_forecast_frame(forecast, 0)
+
+        self.assertTrue(observed_png_replace, "expected the PNG to be rendered")
 
     def test_rendered_frame_is_georeferenced_for_a_mercator_quad(self):
         """A single rain pixel must land on its true position once drawn.

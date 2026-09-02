@@ -6,9 +6,7 @@ from pathlib import Path
 
 import numpy as np
 from django.conf import settings
-from PIL import Image
 from rasterio.crs import CRS
-from rasterio.transform import from_origin
 
 from radar.colormap import apply_colormap
 from radar.models import EnsembleForecast
@@ -17,9 +15,11 @@ from radar.probability import _geographic_source, _proj4_in_meters, _transform_f
 from radar.render import (
     COLOR_STOPS,
     MIN_VISIBLE_MM_HR,
+    _atomic_save_png,
     read_cached_bbox,
     warp_to_web_mercator,
 )
+from radar.render import write_cached_bbox as _write_cached_bbox
 
 _RENDER_LOCK = threading.Lock()
 
@@ -55,8 +55,8 @@ def render_expected_frame(
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         expected, grid = read_expected_precipitation(forecast.file_path, lead_minutes)
         rgba, bbox = _warp_and_colormap(expected, grid)
-        Image.fromarray(rgba, mode="RGBA").save(cache_path)
         _write_cached_bbox(cache_path, bbox)
+        _atomic_save_png(rgba, cache_path)
         return RenderedExpectedFrame(path=cache_path, bbox=bbox)
 
 
@@ -80,11 +80,3 @@ def _warp_and_colormap(
         grid.cols,
     )
     return apply_colormap(destination, COLOR_STOPS, min_visible=MIN_VISIBLE_MM_HR), bbox
-
-
-def _bbox_sidecar_path(cache_path: Path) -> Path:
-    return cache_path.with_suffix(".bbox")
-
-
-def _write_cached_bbox(cache_path: Path, bbox: tuple[float, float, float, float]) -> None:
-    _bbox_sidecar_path(cache_path).write_text(",".join(str(value) for value in bbox))

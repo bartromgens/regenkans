@@ -6,14 +6,14 @@ from pathlib import Path
 
 import numpy as np
 from django.conf import settings
-from PIL import Image
 from rasterio.crs import CRS
 from rasterio.transform import from_origin
 
 from radar.colormap import apply_colormap
 from radar.models import EnsembleForecast
 from radar.netcdf import EnsembleGridInfo, read_probability_of_precipitation
-from radar.render import read_cached_bbox, warp_to_web_mercator
+from radar.render import _atomic_save_png, read_cached_bbox, warp_to_web_mercator
+from radar.render import write_cached_bbox as _write_cached_bbox
 
 _RENDER_LOCK = threading.Lock()
 
@@ -59,8 +59,8 @@ def render_probability_frame(
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         pop, grid = read_probability_of_precipitation(forecast.file_path, lead_minutes)
         rgba, bbox = _warp_and_colormap(pop, grid)
-        Image.fromarray(rgba, mode="RGBA").save(cache_path)
         _write_cached_bbox(cache_path, bbox)
+        _atomic_save_png(rgba, cache_path)
         return RenderedProbabilityFrame(path=cache_path, bbox=bbox)
 
 
@@ -118,11 +118,3 @@ def _proj4_in_meters(proj4: str) -> str:
 
 def _apply_pop_colormap(values: np.ndarray) -> np.ndarray:
     return apply_colormap(values, POP_COLOR_STOPS, min_visible=MIN_VISIBLE_POP)
-
-
-def _bbox_sidecar_path(cache_path: Path) -> Path:
-    return cache_path.with_suffix(".bbox")
-
-
-def _write_cached_bbox(cache_path: Path, bbox: tuple[float, float, float, float]) -> None:
-    _bbox_sidecar_path(cache_path).write_text(",".join(str(value) for value in bbox))

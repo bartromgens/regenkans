@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -107,8 +109,8 @@ def render_forecast_frame(forecast: RadarForecast, lead_minutes: int) -> Rendere
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     mm_hr, grid = read_step_array(forecast.file_path, lead_minutes)
     rgba, bbox = _warp_and_colormap(mm_hr, grid)
-    Image.fromarray(rgba, mode="RGBA").save(cache_path)
-    _write_cached_bbox(cache_path, bbox)
+    write_cached_bbox(cache_path, bbox)
+    _atomic_save_png(rgba, cache_path)
     return RenderedFrame(path=cache_path, bbox=bbox)
 
 
@@ -141,8 +143,35 @@ def _bbox_sidecar_path(cache_path: Path) -> Path:
     return cache_path.with_suffix(".bbox")
 
 
-def _write_cached_bbox(cache_path: Path, bbox: tuple[float, float, float, float]) -> None:
-    _bbox_sidecar_path(cache_path).write_text(",".join(str(v) for v in bbox))
+def _tmp_path_for(path: Path) -> Path:
+    return path.with_name(f"{path.name}.tmp-{uuid.uuid4().hex}")
+
+
+def _atomic_save_png(rgba: np.ndarray, cache_path: Path) -> None:
+    """Write the PNG to a temp file and rename it into place.
+
+    A request that only checks `cache_path.exists()` (the cache fast path
+    used by every renderer) must never observe a partially written PNG.
+    `os.replace` is atomic on the same filesystem, so the file only ever
+    appears once it is fully written.
+    """
+    tmp_path = _tmp_path_for(cache_path)
+    Image.fromarray(rgba, mode="RGBA").save(tmp_path, format="PNG")
+    os.replace(tmp_path, cache_path)
+
+
+def write_cached_bbox(cache_path: Path, bbox: tuple[float, float, float, float]) -> None:
+    """Write the `.bbox` sidecar atomically, and *before* the PNG exists.
+
+    Callers must write the bbox before the PNG (see `_atomic_save_png`), so
+    that once `cache_path.exists()` is true the bbox sidecar is guaranteed
+    to be there too. Without this ordering, a concurrent request can see the
+    freshly written PNG, race ahead, and hit a `FileNotFoundError` reading a
+    `.bbox` file that hasn't been written yet.
+    """
+    tmp_path = _tmp_path_for(_bbox_sidecar_path(cache_path))
+    tmp_path.write_text(",".join(str(v) for v in bbox))
+    os.replace(tmp_path, _bbox_sidecar_path(cache_path))
 
 
 def _read_cached_bbox(cache_path: Path) -> tuple[float, float, float, float]:
