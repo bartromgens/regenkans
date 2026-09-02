@@ -1,0 +1,36 @@
+# Production settings for Docker Compose on the VPS.
+#
+# Setup (run BEFORE the first `docker compose up`, or Docker will create
+# config/settings_local.py as an empty directory instead of a file):
+#
+#   cp config/settings_local.prod.py.example config/settings_local.py
+#   nano config/settings_local.py
+#
+# Fill in SECRET_KEY and KNMI_OPEN_DATA_API_KEY, then restart the stack:
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Database HOST must be "db" — the Docker Compose service name, not "localhost".
+
+DEBUG = False
+SECRET_KEY = "generate-a-long-random-secret-key"
+ALLOWED_HOSTS = ["regenkans.nl", "www.regenkans.nl"]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://regenkans.nl",
+    "https://www.regenkans.nl",
+]
+
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "regenkans",
+        "USER": "regenkans",
+        "HOST": "db",
+        "PORT": "5432",
+    }
+}
+
+# KNMI Open Data API key (registered key recommended)
+# https://developer.dataplatform.knmi.nl/open-data-api
+KNMI_OPEN_DATA_API_KEY = "your-knmi-open-data-api-key"
