@@ -35,10 +35,10 @@ def radar_frame(request, filename: str, lead_minutes: int):
         status=RadarForecast.Status.PARSED,
     ).first()
     if forecast is None:
-        raise Http404("Forecast not found")
+        raise Http404("Verwachting niet gevonden")
 
     if not forecast.steps.filter(lead_minutes=lead_minutes).exists():
-        raise Http404("Forecast step not found")
+        raise Http404("Verwachtingsstap niet gevonden")
 
     try:
         rendered = render_forecast_frame(forecast, lead_minutes)
@@ -61,10 +61,10 @@ def ensemble_frame(request, filename: str, lead_minutes: int):
         status=EnsembleForecast.Status.PARSED,
     ).first()
     if forecast is None:
-        raise Http404("Ensemble forecast not found")
+        raise Http404("Ensembleverwachting niet gevonden")
 
     if not forecast.steps.filter(lead_minutes=lead_minutes).exists():
-        raise Http404("Ensemble forecast step not found")
+        raise Http404("Ensembleverwachtingsstap niet gevonden")
 
     rendered = render_probability_frame(forecast, lead_minutes)
 
@@ -84,18 +84,18 @@ def radar_point(request):
         lng = float(request.query_params.get("lng", ""))
     except (TypeError, ValueError):
         return Response(
-            {"detail": "lat and lng query parameters are required."},
+            {"detail": "De queryparameters lat en lng zijn verplicht."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     if not (-90 <= lat <= 90):
         return Response(
-            {"detail": "lat must be between -90 and 90."},
+            {"detail": "lat moet tussen -90 en 90 liggen."},
             status=status.HTTP_400_BAD_REQUEST,
         )
     if not (-180 <= lng <= 180):
         return Response(
-            {"detail": "lng must be between -180 and 180."},
+            {"detail": "lng moet tussen -180 en 180 liggen."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 

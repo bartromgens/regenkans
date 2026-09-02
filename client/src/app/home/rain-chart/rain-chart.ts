@@ -111,7 +111,7 @@ export class RainChart implements OnDestroy {
       data: {
         datasets: [
           {
-            label: 'Intensity (mm/h)',
+            label: 'Intensiteit (mm/u)',
             data: intensityData,
             borderColor: '#1d4ed8',
             backgroundColor: 'rgba(29, 78, 216, 0.08)',
@@ -122,7 +122,7 @@ export class RainChart implements OnDestroy {
             spanGaps: false,
           },
           {
-            label: 'Probability (%)',
+            label: 'Kans (%)',
             data: probabilityData,
             borderColor: '#c2410c',
             backgroundColor: 'rgba(194, 65, 12, 0.08)',
@@ -180,7 +180,7 @@ export class RainChart implements OnDestroy {
                 if (context.dataset.yAxisID === 'y1') {
                   return `${context.dataset.label}: ${value.toFixed(0)}%`;
                 }
-                return `${context.dataset.label}: ${value.toFixed(2)} mm/h`;
+                return `${context.dataset.label}: ${value.toFixed(2)} mm/u`;
               },
             },
           },
@@ -209,7 +209,7 @@ export class RainChart implements OnDestroy {
             position: 'left',
             title: {
               display: true,
-              text: 'mm/h',
+              text: 'mm/u',
             },
             beginAtZero: true,
           },
@@ -291,7 +291,7 @@ function buildAnnotations(
               xScaleID: 'x',
               yValue: (ctx: { chart: Chart }) => ctx.chart.scales['y']?.max ?? 0,
               yScaleID: 'y',
-              content: 'Now',
+              content: 'Nu',
               position: {
                 x: 'center' as const,
                 y: 'end' as const,

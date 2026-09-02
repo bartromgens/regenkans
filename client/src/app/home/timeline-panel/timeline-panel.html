@@ -2,7 +2,7 @@
   @if (loading()) {
     <div class="timeline-state">
       <mat-spinner diameter="24"></mat-spinner>
-      <span>Loading radar timeline…</span>
+      <span>Radartijdlijn wordt geladen…</span>
     </div>
   } @else if (timelineError()) {
     <div class="timeline-state timeline-state--error">
@@ -19,11 +19,11 @@
         [class.timeline-kind--now]="selectedIndex() === nowIndex()"
       >
         @if (selectedIndex() === nowIndex()) {
-          Now
+          Nu
         } @else if (frames()[selectedIndex()]?.kind === 'forecast') {
-          Forecast
+          Verwachting
         } @else {
-          Past
+          Verleden
         }
       </span>
     </div>
@@ -57,7 +57,7 @@
           aria-hidden="true"
         >
           <span class="timeline-now-mark__line"></span>
-          <span class="timeline-now-mark__label">Now</span>
+          <span class="timeline-now-mark__label">Nu</span>
         </div>
       }
     </div>

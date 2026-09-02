@@ -110,7 +110,7 @@ export class Home implements OnInit {
       this.frames.set(timeline.frames);
 
       if (timeline.frames.length === 0) {
-        this.timelineError.set('No radar data ingested yet.');
+        this.timelineError.set('Nog geen radargegevens geïmporteerd.');
         return;
       }
 
@@ -119,7 +119,7 @@ export class Home implements OnInit {
       this.startNowIndexRefresh();
       await this.selectFrame(nowIndex);
     } catch {
-      this.timelineError.set('Could not load radar timeline.');
+      this.timelineError.set('Kan radartijdlijn niet laden.');
     } finally {
       this.loading.set(false);
     }
@@ -181,8 +181,8 @@ export class Home implements OnInit {
 
   private unavailableMessage(mode: OverlayMode): string {
     return mode === 'intensity'
-      ? 'Intensity not available for this time.'
-      : 'Probability not available for this time.';
+      ? 'Intensiteit niet beschikbaar voor dit tijdstip.'
+      : 'Kans niet beschikbaar voor dit tijdstip.';
   }
 
   private async showFrame(index: number): Promise<void> {
@@ -219,7 +219,7 @@ export class Home implements OnInit {
       this.overlay.set({ imageUrl: source.image_url, bbox });
     } catch {
       if (token === this.frameLoadToken) {
-        this.frameError.set('Could not load radar frame.');
+        this.frameError.set('Kan radarbeeld niet laden.');
       }
     }
   }
@@ -278,7 +278,7 @@ export class Home implements OnInit {
       this.pointSeries.set(response.points);
     } catch {
       if (token === this.pointLoadToken) {
-        this.pointError.set('Could not load rain series for this location.');
+        this.pointError.set('Kan regenreeks voor deze locatie niet laden.');
       }
     } finally {
       if (token === this.pointLoadToken) {

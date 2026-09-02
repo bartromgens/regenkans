@@ -3,9 +3,9 @@ from django.db import models
 
 class RadarForecast(models.Model):
     class Status(models.TextChoices):
-        DOWNLOADED = "downloaded", "Downloaded"
-        PARSED = "parsed", "Parsed"
-        FAILED = "failed", "Failed"
+        DOWNLOADED = "downloaded", "Gedownload"
+        PARSED = "parsed", "Verwerkt"
+        FAILED = "failed", "Mislukt"
 
     filename = models.CharField(max_length=255, unique=True)
     issued_at = models.DateTimeField(db_index=True)
@@ -56,9 +56,9 @@ class RadarForecastStep(models.Model):
 
 class EnsembleForecast(models.Model):
     class Status(models.TextChoices):
-        DOWNLOADED = "downloaded", "Downloaded"
-        PARSED = "parsed", "Parsed"
-        FAILED = "failed", "Failed"
+        DOWNLOADED = "downloaded", "Gedownload"
+        PARSED = "parsed", "Verwerkt"
+        FAILED = "failed", "Mislukt"
 
     filename = models.CharField(max_length=255, unique=True)
     issued_at = models.DateTimeField(db_index=True)

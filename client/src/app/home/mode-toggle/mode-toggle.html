@@ -6,7 +6,7 @@
       [class.mode-toggle__button--active]="mode() === 'intensity'"
       (click)="selectMode('intensity')"
     >
-      Intensity
+      Intensiteit
     </button>
     <button
       type="button"
@@ -15,13 +15,13 @@
       [disabled]="!ensembleAvailable()"
       (click)="selectMode('probability')"
     >
-      Probability
+      Kans
     </button>
   </div>
 
   @if (!ensembleAvailable()) {
     <div class="mode-toggle-hint">
-      Probability view requires an ingested ensemble forecast.
+      Kansweergave vereist een geïmporteerde ensembleverwachting.
     </div>
   }
 </div>
