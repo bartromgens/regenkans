@@ -49,9 +49,11 @@ export class TimelinePanel {
   readonly selectedIndex = input(0);
   readonly nowIndex = input(0);
   readonly currentLabel = input('');
+  readonly playing = input(false);
 
   readonly indexChange = output<number>();
   readonly indexCommit = output<number>();
+  readonly playToggle = output<void>();
 
   constructor() {
     afterRenderEffect(() => {

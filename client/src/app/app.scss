@@ -21,6 +21,23 @@
   font-weight: 600;
 }
 
+.app-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.app-about-link {
+  color: inherit;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.9;
+}
+
+.app-about-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
 .app-content {
   flex: 1;
   overflow: hidden;

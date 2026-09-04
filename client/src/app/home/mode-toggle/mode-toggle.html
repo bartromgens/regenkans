@@ -1,32 +1,53 @@
 <div class="mode-toggle-overlay">
-  <div class="mode-toggle">
+  <div class="mode-toggle-row">
+    <div class="mode-toggle">
+      <button
+        type="button"
+        class="mode-toggle__button"
+        [class.mode-toggle__button--active]="mode() === 'intensity'"
+        (click)="selectMode('intensity')"
+      >
+        Radar
+      </button>
+      <button
+        type="button"
+        class="mode-toggle__button"
+        [class.mode-toggle__button--active]="mode() === 'probability'"
+        [disabled]="!ensembleAvailable()"
+        (click)="selectMode('probability')"
+      >
+        Kans
+      </button>
+      <button
+        type="button"
+        class="mode-toggle__button"
+        [class.mode-toggle__button--active]="mode() === 'expected'"
+        [disabled]="!ensembleAvailable()"
+        (click)="selectMode('expected')"
+      >
+        Gemiddelde
+      </button>
+    </div>
+
     <button
       type="button"
-      class="mode-toggle__button"
-      [class.mode-toggle__button--active]="mode() === 'intensity'"
-      (click)="selectMode('intensity')"
+      class="mode-toggle__info-button"
+      [class.mode-toggle__info-button--active]="showInfo()"
+      (click)="toggleInfo()"
+      aria-label="Uitleg over de weergavemodi"
+      [attr.aria-pressed]="showInfo()"
     >
-      Intensiteit
-    </button>
-    <button
-      type="button"
-      class="mode-toggle__button"
-      [class.mode-toggle__button--active]="mode() === 'probability'"
-      [disabled]="!ensembleAvailable()"
-      (click)="selectMode('probability')"
-    >
-      Kans
-    </button>
-    <button
-      type="button"
-      class="mode-toggle__button"
-      [class.mode-toggle__button--active]="mode() === 'expected'"
-      [disabled]="!ensembleAvailable()"
-      (click)="selectMode('expected')"
-    >
-      Verwacht
+      <mat-icon aria-hidden="true">info</mat-icon>
     </button>
   </div>
+
+  @if (showInfo()) {
+    <div class="mode-toggle-info">
+      <p><strong>Radar</strong> — regenintensiteit (mm/u) op basis van het radarbeeld: gemeten voor verleden/nu, en een korte-termijn radar-extrapolatie (nowcast) voor de eerstkomende tijdstippen.</p>
+      <p><strong>Kans</strong> — kans op neerslag (%), berekend uit de spreiding tussen de leden van de ensemblevoorspelling.</p>
+      <p><strong>Gemiddelde</strong> — verwachte regenintensiteit (mm/u): het gemiddelde over alle leden van dezelfde ensemblevoorspelling.</p>
+    </div>
+  }
 
   @if (!ensembleAvailable()) {
     <div class="mode-toggle-hint">

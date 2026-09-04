@@ -40,7 +40,9 @@
     [selectedIndex]="selectedIndex()"
     [nowIndex]="nowIndex()"
     [currentLabel]="currentLabel()"
+    [playing]="playing()"
     (indexChange)="onSliderInput($event)"
     (indexCommit)="onSliderCommit($event)"
+    (playToggle)="togglePlay()"
   />
 </div>

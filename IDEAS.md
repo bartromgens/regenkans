@@ -11,8 +11,9 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 
 ## Timeline / Map
 
-- [ ] Reduce the timeline slider history to 6 hours by default, but allow an advanced 'history' page that allows users to select any date available in our database, and shows the full 24 hour in a slider
-- [ ] Add a play button that animates the map timeline
+- [x] Reduce the timeline slider history to 6 hours by default
+- [ ] Advanced 'history' page that allows users to select any date available in our database, and shows the full 24 hour in a slider
+- [x] Add a play button that animates the map timeline
 - [ ] Show individual ensemble member forecasts (spaghetti plot / step-through) at a clicked point, instead of only the aggregated probability — the per-member data is already read from the NetCDF file, just currently discarded after being collapsed into the % probability
 
 ## Mobile
@@ -21,7 +22,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 
 ## Pages
 
-- [ ] Add an 'about' page that explains the project, data sources, method and contact info (info@regenkans.nl)
+- [x] Add an 'about' page that explains the project, data sources, method and contact info (info@regenkans.nl)
 - [ ] Public API docs page: document a read-only endpoint for the processed data (not just raw KNMI files) so other devs/hobbyists can build on top of regenkans
 - [ ] Historical extremes page (e.g. "heaviest rain this month/year"), built from already-stored data
 
@@ -60,4 +61,5 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 
 - [ ] Dark mode
 - [ ] English/Dutch language toggle
-- [ ] Keyboard-navigable timeline slider and screen-reader labels for map controls
+- [x] Keyboard-navigable timeline slider (native via Angular Material; added an accessible name/aria-label on the slider and play button)
+- [ ] Screen-reader labels for the remaining map controls (zoom, geolocate, mode toggle)

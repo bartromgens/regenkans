@@ -25,18 +25,55 @@
   color: #b42318;
 }
 
-.timeline-header {
+.timeline-body {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.25rem;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.timeline-time {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.timeline-main {
+  min-width: 0;
 }
 
 .timeline-label {
   font-size: 0.82rem;
   font-weight: 600;
   color: #0f172a;
+}
+
+.timeline-play-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+
+  .material-icons {
+    font-size: 1.1rem;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.4;
+  }
+
+  &:not(:disabled):hover {
+    background: #e2e8f0;
+  }
 }
 
 .timeline-kind {
@@ -129,16 +166,27 @@
   transform: none;
 }
 
+@media (min-width: 641px) {
+  .timeline-body {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.85rem;
+  }
+
+  .timeline-main {
+    flex: 1 1 auto;
+  }
+
+  .timeline-time {
+    align-items: flex-end;
+    text-align: right;
+  }
+}
+
 @media (max-width: 640px) {
   .timeline-panel {
     bottom: 0.75rem;
     padding-inline: 0.75rem;
-  }
-
-  .timeline-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
   }
 
   .timeline-label {

@@ -135,3 +135,81 @@ describe('Home slider frame loading', () => {
     expect(overlaySetSpy.mock.calls[0][0]?.imageUrl).toBe('/api/frame/5.png');
   });
 });
+
+describe('Home playback', () => {
+  let fixture: ComponentFixture<Home>;
+  let home: Home;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() => NEVER),
+      resolveBbox: vi.fn(),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [provideHttpClient(), { provide: RadarService, useValue: radarService }],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Home);
+    home = fixture.componentInstance;
+    home.frames.set(Array.from({ length: 10 }, (_, index) => makeFrame(index)));
+    home.loading.set(false);
+    home.mode.set('intensity');
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function flushAsync(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  it('advances selectedIndex on each tick', async () => {
+    home.selectedIndex.set(0);
+
+    home.togglePlay();
+    expect(home.playing()).toBe(true);
+
+    vi.advanceTimersByTime(700);
+    await flushAsync();
+    expect(home.selectedIndex()).toBe(1);
+
+    vi.advanceTimersByTime(700);
+    await flushAsync();
+    expect(home.selectedIndex()).toBe(2);
+  });
+
+  it('stops itself automatically once it passes the last frame', async () => {
+    home.selectedIndex.set(9);
+
+    home.togglePlay();
+    expect(home.selectedIndex()).toBe(0);
+
+    for (let tick = 0; tick < 9; tick++) {
+      vi.advanceTimersByTime(700);
+      await flushAsync();
+    }
+    expect(home.selectedIndex()).toBe(9);
+    expect(home.playing()).toBe(true);
+
+    vi.advanceTimersByTime(700);
+    await flushAsync();
+    expect(home.playing()).toBe(false);
+    expect(home.selectedIndex()).toBe(9);
+  });
+
+  it('stops playback when the user drags the slider manually', () => {
+    home.togglePlay();
+    expect(home.playing()).toBe(true);
+
+    home.onSliderInput(3);
+    expect(home.playing()).toBe(false);
+  });
+});

@@ -26,6 +26,7 @@ import {
 } from './rain-chart/rain-chart';
 
 const SCRUB_THROTTLE_MS = 150;
+const PLAY_INTERVAL_MS = 700;
 const HOUR_MS = 60 * 60 * 1000;
 
 @Component({
@@ -40,6 +41,7 @@ export class Home implements OnInit {
   private frameLoadToken = 0;
   private pointLoadToken = 0;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
+  private playIntervalId: ReturnType<typeof setInterval> | null = null;
   private scrubTimerId: ReturnType<typeof setTimeout> | null = null;
   private pendingScrubIndex: number | null = null;
   private lastFrameLoadAt = 0;
@@ -64,12 +66,14 @@ export class Home implements OnInit {
   readonly pointError = signal<string | null>(null);
   readonly locationLabel = signal('');
   readonly chartExtendedWindow = signal(false);
+  readonly playing = signal(false);
 
   ngOnInit(): void {
     this.destroyRef.onDestroy(() => {
       if (this.scrubTimerId !== null) {
         clearTimeout(this.scrubTimerId);
       }
+      this.stopPlay();
     });
     void this.loadTimeline();
   }
@@ -110,6 +114,8 @@ export class Home implements OnInit {
     if (!Number.isFinite(index)) {
       return;
     }
+
+    this.stopPlay();
 
     const timelineFrames = this.frames();
     const slot = timelineFrames[index];
@@ -174,6 +180,44 @@ export class Home implements OnInit {
     this.sharedBbox = null;
     this.sharedBboxImageUrl = null;
     await this.showFrame(this.selectedIndex());
+  }
+
+  togglePlay(): void {
+    if (this.playing()) {
+      this.stopPlay();
+      return;
+    }
+
+    const timelineFrames = this.frames();
+    if (timelineFrames.length <= 1) {
+      return;
+    }
+
+    if (this.selectedIndex() >= timelineFrames.length - 1) {
+      void this.selectFrame(0);
+    }
+
+    this.playing.set(true);
+    this.playIntervalId = setInterval(() => this.advancePlayback(), PLAY_INTERVAL_MS);
+  }
+
+  private advancePlayback(): void {
+    const timelineFrames = this.frames();
+    const nextIndex = this.selectedIndex() + 1;
+    if (nextIndex >= timelineFrames.length) {
+      this.stopPlay();
+      return;
+    }
+
+    void this.selectFrame(nextIndex);
+  }
+
+  private stopPlay(): void {
+    if (this.playIntervalId !== null) {
+      clearInterval(this.playIntervalId);
+      this.playIntervalId = null;
+    }
+    this.playing.set(false);
   }
 
   private async loadTimeline(): Promise<void> {

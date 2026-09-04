@@ -66,7 +66,7 @@ export class RadarService {
     });
   }
 
-  getProbabilityTimeline(hours = 24): Observable<ProbabilityTimelineResponse> {
+  getProbabilityTimeline(hours = 6): Observable<ProbabilityTimelineResponse> {
     return this.http.get<ProbabilityTimelineResponse>('/api/ensemble/timeline/', {
       params: { hours: String(hours) },
     });
