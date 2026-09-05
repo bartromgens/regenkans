@@ -4,7 +4,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 
 ## UI / UX
 
-- [ ] Add a favicon
+- [x] Add a favicon
 - [x] Rename the 'intensiteit' toggle to make it more descriptive
 - [x] Rename the 'verwacht' toggle to make it more descriptive
 - [x] Add an information icon next to the toggle that explains the different modes
