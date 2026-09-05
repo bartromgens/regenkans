@@ -221,7 +221,8 @@
     transform: none;
     width: 100%;
     max-width: 100%;
-    padding: 0.2rem max(0.75rem, env(safe-area-inset-right)) 0.15rem
+    padding: 0.2rem max(0.75rem, env(safe-area-inset-right))
+      calc(0.15rem + env(safe-area-inset-bottom, 0px))
       max(0.75rem, env(safe-area-inset-left));
     border-radius: 0;
     box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
