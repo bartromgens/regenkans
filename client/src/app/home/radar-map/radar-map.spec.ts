@@ -50,6 +50,14 @@ const { stubSource, StubImageSource } = vi.hoisted(() => {
 
 vi.mock('maplibre-gl', () => {
   class StubMap {
+    constructor(options: { container: HTMLElement }) {
+      const attrib = document.createElement('details');
+      attrib.className =
+        'maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show';
+      attrib.setAttribute('open', '');
+      options.container.appendChild(attrib);
+    }
+
     isStyleLoaded(): boolean {
       return true;
     }
@@ -99,6 +107,22 @@ const bbox: [number, number, number, number] = [3, 50, 7, 54];
 function overlayFor(url: string): RadarOverlay {
   return { imageUrl: url, bbox };
 }
+
+describe('RadarMap attribution', () => {
+  it('collapses the MapLibre attribution control when the map opens', async () => {
+    await TestBed.configureTestingModule({
+      imports: [RadarMap],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(RadarMap);
+    fixture.detectChanges();
+
+    const attrib = fixture.nativeElement.querySelector('.maplibregl-ctrl-attrib');
+    expect(attrib.classList.contains('maplibregl-compact')).toBe(true);
+    expect(attrib.classList.contains('maplibregl-compact-show')).toBe(false);
+    expect(attrib.hasAttribute('open')).toBe(false);
+  });
+});
 
 describe('RadarMap overlay pump', () => {
   let fixture: ComponentFixture<RadarMap>;

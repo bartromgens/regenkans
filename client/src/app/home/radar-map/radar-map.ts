@@ -77,7 +77,9 @@ export class RadarMap implements OnInit, OnDestroy {
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [5.3, 52.2],
       zoom: 7,
+      attributionControl: { compact: true },
     });
+    this.collapseAttribution();
 
     this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
@@ -104,7 +106,20 @@ export class RadarMap implements OnInit, OnDestroy {
 
     this.map.once('load', () => {
       this.mapHasLoaded = true;
+      this.collapseAttribution();
     });
+  }
+
+  private collapseAttribution(): void {
+    const attrib = this.mapContainer.nativeElement.querySelector(
+      '.maplibregl-ctrl-attrib',
+    );
+    if (!attrib) {
+      return;
+    }
+    attrib.classList.add('maplibregl-compact');
+    attrib.classList.remove('maplibregl-compact-show');
+    attrib.removeAttribute('open');
   }
 
   private updateMarker(location: MapLocation | null): void {
