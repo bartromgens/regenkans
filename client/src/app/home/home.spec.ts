@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { NEVER } from 'rxjs';
+import { BreakpointObserver } from '@angular/cdk/layout';
+import { BehaviorSubject, NEVER } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('maplibre-gl', () => {
@@ -20,6 +21,7 @@ vi.mock('maplibre-gl', () => {
     removeLayer = vi.fn();
     removeSource = vi.fn();
     remove = vi.fn();
+    resize = vi.fn();
   }
 
   class StubMarker {
@@ -40,6 +42,12 @@ vi.mock('maplibre-gl', () => {
 
 import { Home } from './home';
 import { RadarService, TimelineSlot } from '../radar/radar.service';
+
+const mobileMatches$ = new BehaviorSubject({ matches: false, breakpoints: {} });
+
+const breakpointObserver = {
+  observe: vi.fn(() => mobileMatches$.asObservable()),
+};
 
 function makeFrame(index: number): TimelineSlot {
   return {
@@ -64,6 +72,7 @@ describe('Home slider frame loading', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers();
+    mobileMatches$.next({ matches: false, breakpoints: {} });
 
     const radarService = {
       getProbabilityTimeline: vi.fn(() => NEVER),
@@ -73,7 +82,11 @@ describe('Home slider frame loading', () => {
 
     await TestBed.configureTestingModule({
       imports: [Home],
-      providers: [provideHttpClient(), { provide: RadarService, useValue: radarService }],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(Home);
@@ -142,6 +155,7 @@ describe('Home playback', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers();
+    mobileMatches$.next({ matches: false, breakpoints: {} });
 
     const radarService = {
       getProbabilityTimeline: vi.fn(() => NEVER),
@@ -151,7 +165,11 @@ describe('Home playback', () => {
 
     await TestBed.configureTestingModule({
       imports: [Home],
-      providers: [provideHttpClient(), { provide: RadarService, useValue: radarService }],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(Home);
@@ -211,5 +229,102 @@ describe('Home playback', () => {
 
     home.onSliderInput(3);
     expect(home.playing()).toBe(false);
+  });
+});
+
+describe('Home mobile tabs', () => {
+  let fixture: ComponentFixture<Home>;
+  let home: Home;
+
+  beforeEach(async () => {
+    mobileMatches$.next({ matches: true, breakpoints: {} });
+
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() => NEVER),
+      getPointSeries: vi.fn(() => NEVER),
+      resolveBbox: vi.fn(),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Home);
+    home = fixture.componentInstance;
+    home.frames.set(Array.from({ length: 10 }, (_, index) => makeFrame(index)));
+    home.loading.set(false);
+    home.mode.set('intensity');
+    fixture.detectChanges();
+  });
+
+  it('switches to the chart tab after a map click on mobile', () => {
+    expect(home.mobileTab()).toBe('map');
+
+    home.onMapClick({ lat: 52.2, lng: 5.3 });
+
+    expect(home.mobileTab()).toBe('chart');
+    expect(home.selectedLocation()).toEqual({ lat: 52.2, lng: 5.3 });
+  });
+
+  it('allows switching back to the map tab after selecting a location', () => {
+    home.onMapClick({ lat: 52.2, lng: 5.3 });
+    expect(home.mobileTab()).toBe('chart');
+
+    home.onMobileTabChange('map');
+
+    expect(home.mobileTab()).toBe('map');
+    expect(home.selectedLocation()).toEqual({ lat: 52.2, lng: 5.3 });
+  });
+
+  it('stops playback when leaving the map tab', () => {
+    home.togglePlay();
+    expect(home.playing()).toBe(true);
+
+    home.onMobileTabChange('chart');
+
+    expect(home.playing()).toBe(false);
+  });
+});
+
+describe('Home mobile map click on desktop', () => {
+  let fixture: ComponentFixture<Home>;
+  let home: Home;
+
+  beforeEach(async () => {
+    mobileMatches$.next({ matches: false, breakpoints: {} });
+
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() => NEVER),
+      getPointSeries: vi.fn(() => NEVER),
+      resolveBbox: vi.fn(),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Home);
+    home = fixture.componentInstance;
+    home.loading.set(false);
+    fixture.detectChanges();
+  });
+
+  it('does not change the mobile tab on desktop map clicks', () => {
+    home.onMapClick({ lat: 52.2, lng: 5.3 });
+
+    expect(home.mobileTab()).toBe('map');
+    expect(home.selectedLocation()).toEqual({ lat: 52.2, lng: 5.3 });
   });
 });

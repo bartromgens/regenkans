@@ -33,9 +33,11 @@
           </button>
         </div>
       }
-      <button type="button" class="rain-chart-close" (click)="close()" aria-label="Grafiek sluiten">
-        ×
-      </button>
+      @if (showCloseButton()) {
+        <button type="button" class="rain-chart-close" (click)="close()" aria-label="Grafiek sluiten">
+          ×
+        </button>
+      }
     </div>
   </div>
 

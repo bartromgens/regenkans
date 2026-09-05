@@ -67,6 +67,10 @@ export class RadarMap implements OnInit, OnDestroy {
     this.map?.remove();
   }
 
+  resize(): void {
+    this.map?.resize();
+  }
+
   private initMap(): void {
     this.map = new maplibregl.Map({
       container: this.mapContainer.nativeElement,

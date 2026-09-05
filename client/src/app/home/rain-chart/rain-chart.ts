@@ -69,6 +69,7 @@ const BAND_LABEL_MIN_HEIGHT_PX = 15;
 })
 export class RainChart implements OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly hostElement = inject(ElementRef<HTMLElement>);
   private readonly chartCanvas = viewChild<ElementRef<HTMLCanvasElement>>('chartCanvas');
   private readonly clockMs = signal(Date.now());
 
@@ -80,6 +81,7 @@ export class RainChart implements OnDestroy {
   readonly locationLabel = input('');
   readonly maxAvailableHours = input<number | null>(null);
   readonly extendedWindow = input(false);
+  readonly showCloseButton = input(true);
 
   readonly closed = output<void>();
   readonly windowChange = output<boolean>();
@@ -99,10 +101,39 @@ export class RainChart implements OnDestroy {
       this.extendedWindow();
       this.renderChart();
     });
+
+    afterRenderEffect((onCleanup) => {
+      const canvasWrap = this.chartCanvas()?.nativeElement.parentElement;
+      if (!canvasWrap) {
+        return;
+      }
+
+      const observer = new ResizeObserver(() => this.resize());
+      observer.observe(canvasWrap);
+      observer.observe(this.hostElement.nativeElement);
+      onCleanup(() => observer.disconnect());
+    });
   }
 
   ngOnDestroy(): void {
     this.chart?.destroy();
+  }
+
+  resize(): void {
+    if (this.chart) {
+      this.chart.resize();
+      return;
+    }
+
+    const canvas = this.chartCanvas()?.nativeElement;
+    if (
+      canvas &&
+      !this.loading() &&
+      !this.error() &&
+      this.series().length > 0
+    ) {
+      this.renderChart();
+    }
   }
 
   close(): void {

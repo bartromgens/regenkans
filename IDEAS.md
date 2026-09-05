@@ -7,7 +7,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 - [x] Rename the 'intensiteit' toggle to make it more descriptive
 - [x] Rename the 'verwacht' toggle to make it more descriptive
 - [x] Add an information icon next to the toggle that explains the different modes
-- [ ] Improve the plot position and layout, both on mobile (dedicated page/tab) and desktop (larger and not on top of the slider)
+- [ ] Improve the plot position and layout on desktop (larger and not on top of the slider)
 
 ## Timeline / Map
 
@@ -18,7 +18,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 
 ## Mobile
 
-- [ ] Create a dedicated/optimized mobile version with two pages 'map' and 'chart' (as tabs on the top), and a slider that always works
+- [x] Create a dedicated/optimized mobile version with two pages 'map' and 'chart' (as tabs on the top), and a slider that always works
 
 ## Pages
 

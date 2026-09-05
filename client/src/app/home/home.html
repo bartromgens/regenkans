@@ -1,48 +1,102 @@
-<div class="map-layout">
-  <app-radar-map
-    [overlay]="overlay()"
-    [markerLocation]="selectedLocation()"
-    (locationClick)="onMapClick($event)"
-    (overlayApplied)="onOverlayApplied($event)"
-    (overlayFailed)="onOverlayFailed($event)"
-  />
-
-  @if (!loading() && !timelineError()) {
-    <app-mode-toggle
-      [mode]="mode()"
-      [ensembleAvailable]="ensembleAvailable()"
-      (modeChange)="setMode($event)"
-    />
-
-    <app-map-legend [mode]="mode()" />
+<div class="map-layout" [class.map-layout--mobile]="isMobile()">
+  @if (isMobile()) {
+    <nav class="mobile-tabs" role="tablist" aria-label="Kaart of grafiek">
+      <button
+        type="button"
+        class="mobile-tabs__button"
+        role="tab"
+        [class.mobile-tabs__button--active]="mobileTab() === 'map'"
+        [attr.aria-selected]="mobileTab() === 'map'"
+        (click)="onMobileTabChange('map')"
+      >
+        Kaart
+      </button>
+      <button
+        type="button"
+        class="mobile-tabs__button"
+        role="tab"
+        [class.mobile-tabs__button--active]="mobileTab() === 'chart'"
+        [attr.aria-selected]="mobileTab() === 'chart'"
+        (click)="onMobileTabChange('chart')"
+      >
+        Grafiek
+      </button>
+    </nav>
   }
 
-  @if (selectedLocation()) {
-    <app-rain-chart
-      [series]="pointSeries()"
-      [selectedValidAt]="selectedValidAt()"
-      [loading]="pointLoading()"
-      [extending]="pointExtending()"
-      [error]="pointError()"
-      [locationLabel]="locationLabel()"
-      [maxAvailableHours]="chartMaxAvailableHours()"
-      [extendedWindow]="chartExtendedWindow()"
-      (closed)="onChartClosed()"
-      (windowChange)="onChartWindowChange($event)"
-    />
-  }
+  <div class="pane-stack">
+    <div
+      class="map-pane"
+      [class.map-pane--hidden]="isMobile() && mobileTab() === 'chart'"
+    >
+      <app-radar-map
+        #radarMap
+        [overlay]="overlay()"
+        [markerLocation]="selectedLocation()"
+        (locationClick)="onMapClick($event)"
+        (overlayApplied)="onOverlayApplied($event)"
+        (overlayFailed)="onOverlayFailed($event)"
+      />
 
-  <app-timeline-panel
-    [loading]="loading()"
-    [timelineError]="timelineError()"
-    [frameError]="frameError()"
-    [frames]="frames()"
-    [selectedIndex]="selectedIndex()"
-    [nowIndex]="nowIndex()"
-    [currentLabel]="currentLabel()"
-    [playing]="playing()"
-    (indexChange)="onSliderInput($event)"
-    (indexCommit)="onSliderCommit($event)"
-    (playToggle)="togglePlay()"
-  />
+      @if (!loading() && !timelineError()) {
+        <app-mode-toggle
+          [mode]="mode()"
+          [ensembleAvailable]="ensembleAvailable()"
+          (modeChange)="setMode($event)"
+        />
+
+        <app-map-legend [mode]="mode()" />
+      }
+
+      <app-timeline-panel
+        [loading]="loading()"
+        [timelineError]="timelineError()"
+        [frameError]="frameError()"
+        [frames]="frames()"
+        [selectedIndex]="selectedIndex()"
+        [nowIndex]="nowIndex()"
+        [currentLabel]="currentLabel()"
+        [playing]="playing()"
+        (indexChange)="onSliderInput($event)"
+        (indexCommit)="onSliderCommit($event)"
+        (playToggle)="togglePlay()"
+      />
+    </div>
+
+    <div
+      class="chart-pane"
+      [class.chart-pane--active]="isMobile() && mobileTab() === 'chart'"
+      [class.chart-pane--overlay]="!isMobile() && selectedLocation()"
+    >
+      @if (isMobile() && mobileTab() === 'chart' && !selectedLocation()) {
+        <div class="chart-empty">
+          <p class="chart-empty__text">Tik op de kaart om een locatie te kiezen.</p>
+          <button
+            type="button"
+            class="chart-empty__button"
+            (click)="onMobileTabChange('map')"
+          >
+            Naar de kaart
+          </button>
+        </div>
+      }
+
+      @if (selectedLocation()) {
+        <app-rain-chart
+          #rainChart
+          [series]="pointSeries()"
+          [selectedValidAt]="selectedValidAt()"
+          [loading]="pointLoading()"
+          [extending]="pointExtending()"
+          [error]="pointError()"
+          [locationLabel]="locationLabel()"
+          [maxAvailableHours]="chartMaxAvailableHours()"
+          [extendedWindow]="chartExtendedWindow()"
+          [showCloseButton]="!isMobile()"
+          (closed)="onChartClosed()"
+          (windowChange)="onChartWindowChange($event)"
+        />
+      }
+    </div>
+  </div>
 </div>

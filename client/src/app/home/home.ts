@@ -1,11 +1,16 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import {
   Component,
   DestroyRef,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
+  viewChild,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { map } from 'rxjs';
 import {
   FrameSource,
   OverlayMode,
@@ -28,6 +33,9 @@ import {
 const SCRUB_THROTTLE_MS = 150;
 const PLAY_INTERVAL_MS = 700;
 const HOUR_MS = 60 * 60 * 1000;
+const MOBILE_BREAKPOINT = '(max-width: 640px)';
+
+export type MobileTab = 'map' | 'chart';
 
 @Component({
   imports: [ModeToggle, MapLegend, TimelinePanel, RadarMap, RainChart],
@@ -38,6 +46,10 @@ const HOUR_MS = 60 * 60 * 1000;
 export class Home implements OnInit {
   private readonly radarService = inject(RadarService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly breakpointObserver = inject(BreakpointObserver);
+  private readonly radarMap = viewChild(RadarMap);
+  private readonly rainChart = viewChild(RainChart);
+  private wasMobile = false;
   private frameLoadToken = 0;
   private pointLoadToken = 0;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -67,6 +79,24 @@ export class Home implements OnInit {
   readonly locationLabel = signal('');
   readonly chartExtendedWindow = signal(false);
   readonly playing = signal(false);
+  readonly mobileTab = signal<MobileTab>('map');
+  readonly isMobile = toSignal(
+    this.breakpointObserver.observe(MOBILE_BREAKPOINT).pipe(map((result) => result.matches)),
+    { initialValue: false },
+  );
+
+  constructor() {
+    effect(() => {
+      const mobile = this.isMobile();
+      if (mobile && !this.wasMobile) {
+        this.mobileTab.set('map');
+      }
+      if (mobile !== this.wasMobile) {
+        requestAnimationFrame(() => this.schedulePaneResize());
+      }
+      this.wasMobile = mobile;
+    });
+  }
 
   ngOnInit(): void {
     this.destroyRef.onDestroy(() => {
@@ -82,7 +112,33 @@ export class Home implements OnInit {
     this.selectedLocation.set(location);
     this.locationLabel.set(this.formatLocation(location));
     this.chartExtendedWindow.set(false);
+    if (this.isMobile()) {
+      this.mobileTab.set('chart');
+      requestAnimationFrame(() => this.schedulePaneResize());
+    }
     void this.loadPointSeries(location);
+  }
+
+  onMobileTabChange(tab: MobileTab): void {
+    if (tab === this.mobileTab()) {
+      return;
+    }
+
+    if (tab === 'chart' && this.mobileTab() === 'map') {
+      this.stopPlay();
+    }
+
+    this.mobileTab.set(tab);
+    requestAnimationFrame(() => this.schedulePaneResize());
+  }
+
+  private schedulePaneResize(): void {
+    if (!this.isMobile() || this.mobileTab() === 'map') {
+      this.radarMap()?.resize();
+    }
+    if (this.isMobile() && this.mobileTab() === 'chart') {
+      this.rainChart()?.resize();
+    }
   }
 
   onChartClosed(): void {

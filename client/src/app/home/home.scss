@@ -1,6 +1,121 @@
 .map-layout {
+  display: flex;
+  flex-direction: column;
   position: relative;
   width: 100%;
   height: 100%;
   overflow: hidden;
+}
+
+.mobile-tabs {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.35rem 0.75rem;
+  background: rgba(248, 250, 252, 0.98);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  z-index: 3;
+}
+
+.mobile-tabs__button {
+  flex: 1;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  background: transparent;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mobile-tabs__button--active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.pane-stack {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.map-pane {
+  position: absolute;
+  inset: 0;
+}
+
+.map-pane--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.chart-pane {
+  display: none;
+}
+
+.chart-pane--overlay {
+  display: block;
+  position: absolute;
+  left: 50%;
+  bottom: 5.75rem;
+  transform: translateX(-50%);
+  z-index: 2;
+  width: min(640px, calc(100% - 2rem));
+  pointer-events: none;
+}
+
+.chart-pane--overlay app-rain-chart {
+  pointer-events: auto;
+}
+
+.map-layout--mobile .chart-pane--active {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: #ffffff;
+}
+
+.map-layout--mobile .chart-pane--active app-rain-chart {
+  flex: 1;
+  min-height: 0;
+}
+
+.chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  height: 100%;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.chart-empty__text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.chart-empty__button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  background: #1d4ed8;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .chart-pane--overlay {
+    bottom: 6.5rem;
+    padding-inline: 0.75rem;
+  }
 }
