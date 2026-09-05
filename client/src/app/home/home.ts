@@ -7,6 +7,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -50,6 +51,8 @@ export class Home implements OnInit {
   private readonly radarMap = viewChild(RadarMap);
   private readonly rainChart = viewChild(RainChart);
   private wasMobile = false;
+  private timelineReady = false;
+  private mobileAutoplayStarted = false;
   private frameLoadToken = 0;
   private pointLoadToken = 0;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -95,6 +98,9 @@ export class Home implements OnInit {
         requestAnimationFrame(() => this.schedulePaneResize());
       }
       this.wasMobile = mobile;
+      if (mobile) {
+        untracked(() => this.maybeStartMobileAutoplay());
+      }
     });
   }
 
@@ -244,13 +250,29 @@ export class Home implements OnInit {
       return;
     }
 
+    this.startPlay();
+  }
+
+  private maybeStartMobileAutoplay(): void {
+    if (this.mobileAutoplayStarted || !this.isMobile() || !this.timelineReady) {
+      return;
+    }
+    if (this.mobileTab() === 'chart' || this.frames().length <= 1) {
+      return;
+    }
+
+    this.mobileAutoplayStarted = true;
+    this.startPlay();
+  }
+
+  private startPlay(): void {
     const timelineFrames = this.frames();
-    if (timelineFrames.length <= 1) {
+    if (timelineFrames.length <= 1 || this.playing()) {
       return;
     }
 
     if (this.selectedIndex() >= timelineFrames.length - 1) {
-      void this.selectFrame(0);
+      void this.selectFrame(this.playbackLoopIndex());
     }
 
     this.playing.set(true);
@@ -261,11 +283,22 @@ export class Home implements OnInit {
     const timelineFrames = this.frames();
     const nextIndex = this.selectedIndex() + 1;
     if (nextIndex >= timelineFrames.length) {
+      if (this.isMobile()) {
+        void this.selectFrame(this.playbackLoopIndex());
+        return;
+      }
       this.stopPlay();
       return;
     }
 
     void this.selectFrame(nextIndex);
+  }
+
+  private playbackLoopIndex(): number {
+    if (this.isMobile()) {
+      return this.nowIndex();
+    }
+    return 0;
   }
 
   private stopPlay(): void {
@@ -303,10 +336,13 @@ export class Home implements OnInit {
       this.nowIndex.set(nowIndex);
       this.startNowIndexRefresh();
       await this.selectFrame(nowIndex);
+      this.timelineReady = true;
+      this.maybeStartMobileAutoplay();
     } catch {
       this.timelineError.set('Kan radartijdlijn niet laden.');
     } finally {
       this.loading.set(false);
+      requestAnimationFrame(() => this.schedulePaneResize());
     }
   }
 

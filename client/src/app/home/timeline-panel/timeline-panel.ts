@@ -93,6 +93,8 @@ export class TimelinePanel {
     return { edge: 'middle', offset: `${offsetPx}px` };
   });
 
+  readonly timeLabel = computed(() => this.displayWith(this.selectedIndex()));
+
   readonly displayWith = (index: number): string => {
     const frame = this.frames()[index];
     if (!frame) {

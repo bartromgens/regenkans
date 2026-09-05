@@ -1,4 +1,21 @@
+:host {
+  display: block;
+}
+
+@media (min-width: 641px) {
+  :host {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .timeline-panel {
+    pointer-events: auto;
+  }
+}
+
 .timeline-panel {
+  box-sizing: border-box;
   position: absolute;
   left: 50%;
   bottom: 1rem;
@@ -47,6 +64,10 @@
   font-size: 0.82rem;
   font-weight: 600;
   color: #0f172a;
+}
+
+.timeline-label--time {
+  display: none;
 }
 
 .timeline-play-button {
@@ -105,7 +126,6 @@
 
 .timeline-slider-wrap {
   position: relative;
-  padding-bottom: 0.7rem;
 }
 
 .timeline-slider {
@@ -126,7 +146,7 @@
 .timeline-now-mark {
   position: absolute;
   top: 0;
-  bottom: 0.7rem;
+  bottom: 0;
   width: 0;
   transform: translateX(-50%);
   pointer-events: none;
@@ -145,9 +165,9 @@
 
 .timeline-now-mark__label {
   position: absolute;
-  top: calc(100% - 2px);
+  top: calc(50% - 10px);
   left: 50%;
-  transform: translateX(-50%);
+  transform: translate(-50%, -100%);
   font-size: 0.58rem;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -157,13 +177,13 @@
 
 .timeline-now-mark[data-edge='start'] .timeline-now-mark__label {
   left: 0;
-  transform: none;
+  transform: translateY(-100%);
 }
 
 .timeline-now-mark[data-edge='end'] .timeline-now-mark__label {
   left: auto;
   right: 0;
-  transform: none;
+  transform: translateY(-100%);
 }
 
 @media (min-width: 641px) {
@@ -184,12 +204,74 @@
 }
 
 @media (max-width: 640px) {
-  .timeline-panel {
-    bottom: 0.75rem;
-    padding-inline: 0.75rem;
+  :host {
+    box-sizing: border-box;
+    flex-shrink: 0;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
 
-  .timeline-label {
-    font-size: 0.78rem;
+  .timeline-panel {
+    position: relative;
+    left: auto;
+    right: auto;
+    bottom: auto;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    padding: 0.2rem max(0.75rem, env(safe-area-inset-right)) 0.15rem
+      max(0.75rem, env(safe-area-inset-left));
+    border-radius: 0;
+    box-shadow: 0 -4px 16px rgba(15, 23, 42, 0.08);
+  }
+
+  .timeline-body,
+  .timeline-main,
+  .timeline-slider-wrap {
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .timeline-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .timeline-play-button,
+  .timeline-kind,
+  .timeline-label--full {
+    display: none;
+  }
+
+  .timeline-time {
+    order: -1;
+    align-items: flex-end;
+    max-width: 100%;
+    min-height: 1.1rem;
+  }
+
+  .timeline-label--time {
+    display: block;
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeline-slider {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .timeline-slider ::ng-deep .mdc-slider__value-indicator-container {
+    display: none;
+  }
+
+  .timeline-slider-wrap {
+    padding-inline: 8px;
   }
 }

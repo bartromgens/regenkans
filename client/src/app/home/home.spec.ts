@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { BehaviorSubject, NEVER } from 'rxjs';
+import { BehaviorSubject, NEVER, of } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('maplibre-gl', () => {
@@ -289,6 +289,133 @@ describe('Home mobile tabs', () => {
     home.onMobileTabChange('chart');
 
     expect(home.playing()).toBe(false);
+  });
+});
+
+describe('Home mobile autoplay', () => {
+  let fixture: ComponentFixture<Home>;
+  let home: Home;
+
+  function timelineResponse() {
+    const now = Date.now();
+    return {
+      generated_at: new Date(now).toISOString(),
+      now: new Date(now).toISOString(),
+      ensemble_available: false,
+      frames: [-20, -10, 0, 10, 20].map((minutes, index) => ({
+        ...makeFrame(index),
+        valid_at: new Date(now + minutes * 60_000).toISOString(),
+      })),
+    };
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function flushAsync(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  it('starts playback after the timeline loads on mobile', async () => {
+    mobileMatches$.next({ matches: true, breakpoints: {} });
+
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() => of(timelineResponse())),
+      resolveBbox: vi.fn(),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Home);
+    home = fixture.componentInstance;
+    fixture.detectChanges();
+    await flushAsync();
+
+    expect(home.playing()).toBe(true);
+    expect(home.nowIndex()).toBe(2);
+    expect(home.selectedIndex()).toBe(2);
+  });
+
+  it('does not autoplay after the timeline loads on desktop', async () => {
+    mobileMatches$.next({ matches: false, breakpoints: {} });
+
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() => of(timelineResponse())),
+      resolveBbox: vi.fn(),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Home);
+    home = fixture.componentInstance;
+    fixture.detectChanges();
+    await flushAsync();
+
+    expect(home.playing()).toBe(false);
+  });
+
+  it('loops playback on mobile instead of stopping at the last frame', async () => {
+    vi.useFakeTimers();
+    mobileMatches$.next({ matches: true, breakpoints: {} });
+
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() => NEVER),
+      resolveBbox: vi.fn(),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Home);
+    home = fixture.componentInstance;
+    home.frames.set(Array.from({ length: 4 }, (_, index) => makeFrame(index)));
+    home.loading.set(false);
+    home.mode.set('intensity');
+    home.nowIndex.set(1);
+    home.selectedIndex.set(3);
+    fixture.detectChanges();
+
+    home.togglePlay();
+    expect(home.selectedIndex()).toBe(1);
+
+    vi.advanceTimersByTime(700);
+    await flushAsync();
+    expect(home.selectedIndex()).toBe(2);
+
+    vi.advanceTimersByTime(700);
+    await flushAsync();
+    expect(home.selectedIndex()).toBe(3);
+
+    vi.advanceTimersByTime(700);
+    await flushAsync();
+    expect(home.playing()).toBe(true);
+    expect(home.selectedIndex()).toBe(1);
   });
 });
 
