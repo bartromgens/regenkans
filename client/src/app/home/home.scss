@@ -127,6 +127,10 @@
     max-width: 100%;
   }
 
+  .chart-empty {
+    padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .chart-pane--overlay {
     bottom: 6.5rem;
     padding-inline: 0.75rem;
