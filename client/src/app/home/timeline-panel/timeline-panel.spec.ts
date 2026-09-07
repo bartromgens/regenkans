@@ -67,3 +67,33 @@ describe('TimelinePanel play button', () => {
     expect(playButton().disabled).toBe(true);
   });
 });
+
+describe('TimelinePanel time labels', () => {
+  let fixture: ComponentFixture<TimelinePanel>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [TimelinePanel],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(TimelinePanel);
+    fixture.componentRef.setInput('frames', [makeFrame(14)]);
+    fixture.componentRef.setInput('selectedIndex', 0);
+    fixture.componentRef.setInput('currentLabel', 'zo 30 aug 16:00');
+    fixture.detectChanges();
+  });
+
+  it('keeps the full date label and a time-only label for the selected frame', () => {
+    const full = fixture.nativeElement.querySelector('.timeline-label--full');
+    const time = fixture.nativeElement.querySelector('.timeline-label--time');
+
+    expect(full.textContent.trim()).toBe('zo 30 aug 16:00');
+    expect(time.textContent.trim()).toBe(
+      new Intl.DateTimeFormat('nl-NL', {
+        timeZone: 'Europe/Amsterdam',
+        hour: '2-digit',
+        minute: '2-digit',
+      }).format(new Date('2026-08-30T14:00:00Z')),
+    );
+  });
+});

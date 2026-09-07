@@ -20,7 +20,7 @@ All weather data comes from the [KNMI Data Platform Open Data API](https://api.d
 | `radar_forecast` v2.0 | Real radar images and a short rain forecast (HDF5) | Intensity view — how hard it is raining |
 | `seamless_precipitation_ensemble_forecast_members` v1.0 | Many forecast runs combined (NetCDF) | Probability view — how likely rain is |
 
-You need a free API key from [developer.dataplatform.knmi.nl](https://developer.dataplatform.knmi.nl/open-data-api). Put it in `config/settings_local.py` as `KNMI_OPEN_DATA_API_KEY`.
+You need a free API key from [developer.dataplatform.knmi.nl](https://developer.dataplatform.knmi.nl). Put it in `config/settings_local.py` as `KNMI_OPEN_DATA_API_KEY`.
 
 Downloaded files are stored in `data/radar_forecast/` and `data/ensemble_forecast/` (these folders are not in git). The database keeps track of which files have been ingested.
 

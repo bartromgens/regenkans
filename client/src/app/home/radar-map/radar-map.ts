@@ -13,6 +13,9 @@ import * as maplibregl from 'maplibre-gl';
 const OVERLAY_SOURCE_ID = 'radar-overlay';
 const OVERLAY_LAYER_ID = 'radar-overlay-layer';
 const SOURCE_SETTLE_TIMEOUT_MS = 4_000;
+const MOBILE_BREAKPOINT = '(max-width: 640px)';
+const DEFAULT_ZOOM = 7;
+const MOBILE_ZOOM = DEFAULT_ZOOM - 1;
 
 export interface RadarOverlay {
   imageUrl: string;
@@ -72,12 +75,15 @@ export class RadarMap implements OnInit, OnDestroy {
   }
 
   private initMap(): void {
+    const isMobile = window.matchMedia(MOBILE_BREAKPOINT).matches;
     this.map = new maplibregl.Map({
       container: this.mapContainer.nativeElement,
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [5.3, 52.2],
-      zoom: 7,
+      zoom: isMobile ? MOBILE_ZOOM : DEFAULT_ZOOM,
+      attributionControl: { compact: true },
     });
+    this.collapseAttribution();
 
     this.map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
@@ -104,7 +110,20 @@ export class RadarMap implements OnInit, OnDestroy {
 
     this.map.once('load', () => {
       this.mapHasLoaded = true;
+      this.collapseAttribution();
     });
+  }
+
+  private collapseAttribution(): void {
+    const attrib = this.mapContainer.nativeElement.querySelector(
+      '.maplibregl-ctrl-attrib',
+    );
+    if (!attrib) {
+      return;
+    }
+    attrib.classList.add('maplibregl-compact');
+    attrib.classList.remove('maplibregl-compact-show');
+    attrib.removeAttribute('open');
   }
 
   private updateMarker(location: MapLocation | null): void {

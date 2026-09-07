@@ -60,7 +60,8 @@
       </div>
 
       <div class="timeline-time">
-        <span class="timeline-label">{{ currentLabel() }}</span>
+        <span class="timeline-label timeline-label--full">{{ currentLabel() }}</span>
+        <span class="timeline-label timeline-label--time">{{ timeLabel() }}</span>
         <span
           class="timeline-kind"
           [class.timeline-kind--forecast]="
