@@ -78,7 +78,15 @@
   flex-direction: column;
 }
 
-.map-pane app-radar-map {
+.map-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+}
+
+.map-stage app-radar-map {
   flex: 1 1 0;
   min-height: 0;
 }

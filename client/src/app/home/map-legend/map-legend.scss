@@ -1,6 +1,6 @@
 .map-legend {
   position: absolute;
-  top: 0.75rem;
+  bottom: 5.75rem;
   left: 0.75rem;
   z-index: 2;
   padding: 0.45rem 0.55rem;
@@ -14,16 +14,20 @@
 .intensity-legend {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-items: stretch;
+  gap: 0.2rem;
 }
 
-.intensity-legend__label {
-  font-size: 0.62rem;
+.intensity-legend__unit {
+  font-size: 0.58rem;
   font-weight: 600;
+  line-height: 1;
+  text-align: center;
   color: #475569;
 }
 
-.intensity-legend__body {
+.intensity-legend__body,
+.probability-legend {
   display: flex;
   align-items: stretch;
   gap: 0.35rem;
@@ -32,7 +36,6 @@
 
 .intensity-legend__bar {
   width: 0.45rem;
-  height: 100%;
   border-radius: 999px;
   background: linear-gradient(
     180deg,
@@ -49,7 +52,7 @@
 .intensity-legend__scale {
   position: relative;
   flex: 1;
-  height: 100%;
+  min-width: 1.35rem;
   font-size: 0.58rem;
   line-height: 1;
   color: #64748b;
@@ -79,27 +82,8 @@
   transform: translateY(-100%);
 }
 
-.probability-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.probability-legend__label {
-  font-size: 0.62rem;
-  font-weight: 600;
-  color: #475569;
-}
-
-.probability-legend__body {
-  display: flex;
-  align-items: stretch;
-  gap: 0.35rem;
-}
-
 .probability-legend__bar {
   width: 0.45rem;
-  height: 5rem;
   border-radius: 999px;
   background: linear-gradient(
     180deg,
@@ -121,7 +105,7 @@
 
 @media (max-width: 640px) {
   .map-legend {
-    top: 0.5rem;
+    bottom: 0.5rem;
     left: 0.5rem;
     padding: 0.35rem 0.45rem;
   }

@@ -31,24 +31,26 @@
       class="map-pane"
       [class.map-pane--hidden]="isMobile() && mobileTab() === 'chart'"
     >
-      <app-radar-map
-        #radarMap
-        [overlay]="overlay()"
-        [markerLocation]="selectedLocation()"
-        (locationClick)="onMapClick($event)"
-        (overlayApplied)="onOverlayApplied($event)"
-        (overlayFailed)="onOverlayFailed($event)"
-      />
-
-      @if (!loading() && !timelineError()) {
-        <app-mode-toggle
-          [mode]="mode()"
-          [ensembleAvailable]="ensembleAvailable()"
-          (modeChange)="setMode($event)"
+      <div class="map-stage">
+        <app-radar-map
+          #radarMap
+          [overlay]="overlay()"
+          [markerLocation]="selectedLocation()"
+          (locationClick)="onMapClick($event)"
+          (overlayApplied)="onOverlayApplied($event)"
+          (overlayFailed)="onOverlayFailed($event)"
         />
 
-        <app-map-legend [mode]="mode()" />
-      }
+        @if (!loading() && !timelineError()) {
+          <app-mode-toggle
+            [mode]="mode()"
+            [ensembleAvailable]="ensembleAvailable()"
+            (modeChange)="setMode($event)"
+          />
+
+          <app-map-legend [mode]="mode()" />
+        }
+      </div>
 
       <app-timeline-panel
         [loading]="loading()"
