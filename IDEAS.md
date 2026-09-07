@@ -16,6 +16,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 - [ ] Advanced 'history' page that allows users to select any date available in our database, and shows the full 24 hour in a slider
 - [x] Add a play button that animates the map timeline
 - [ ] Show individual ensemble member forecasts (spaghetti plot / step-through) at a clicked point, instead of only the aggregated probability — the per-member data is already read from the NetCDF file, just currently discarded after being collapsed into the % probability
+- [ ] Show ensemble min and max (in addition to the aggregate) — on the chart as a band/range (off by default) and as a map overlay, so users can see the spread between the driest and wettest members
 
 ## Mobile
 
@@ -50,6 +51,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 - [ ] Forecast verification page: track how probability predictions compared to what radar actually observed afterwards, as a measure of forecast skill over time
   - [ ] Backend: persist forecasts (per-member or aggregate) at issue time, join against later radar observations for the same time/place, and compute a skill metric (e.g. Brier score) — needed to power the verification page above
 - [ ] Data freshness indicator (e.g. "radar updated 3 min ago") so users notice if ingestion has stalled, rather than silently viewing stale data
+- [ ] Auto-refresh the page/view when new radar or ensemble data is available — the map and chart currently stay on the data loaded at page open and get outdated without a manual reload
 - [ ] Ensemble spread indicator: show member disagreement (e.g. std dev across the 20 members) as a layer alongside intensity/probability, so low spread reads as "confident" and high spread as "uncertain"
   - [ ] Stretch: divergence-rate ("chaos") indicator — track how fast spread grows with lead time, to distinguish forecasts that are uncertain from the start vs. ones that start tight and blow apart
 
