@@ -34,6 +34,7 @@ const SCRUB_THROTTLE_MS = 150;
 const PLAY_INTERVAL_MS = 700;
 const HOUR_MS = 60 * 60 * 1000;
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
+const GEOLOCATION_TIMEOUT_MS = 10_000;
 
 export type MobileTab = 'map' | 'chart';
 
@@ -52,6 +53,7 @@ export class Home implements OnInit {
   private wasMobile = false;
   private frameLoadToken = 0;
   private pointLoadToken = 0;
+  private geolocationLoadToken = 0;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
   private playIntervalId: ReturnType<typeof setInterval> | null = null;
   private scrubTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -80,6 +82,9 @@ export class Home implements OnInit {
   readonly chartExtendedWindow = signal(false);
   readonly playing = signal(false);
   readonly mobileTab = signal<MobileTab>('map');
+  readonly chartTabNeedsAttention = signal(false);
+  readonly geolocationLoading = signal(false);
+  readonly geolocationError = signal<string | null>(null);
   readonly isMobile = toSignal(
     this.breakpointObserver.observe(MOBILE_BREAKPOINT).pipe(map((result) => result.matches)),
     { initialValue: false },
@@ -112,9 +117,8 @@ export class Home implements OnInit {
     this.selectedLocation.set(location);
     this.locationLabel.set(this.formatLocation(location));
     this.chartExtendedWindow.set(false);
-    if (this.isMobile()) {
-      this.mobileTab.set('chart');
-      requestAnimationFrame(() => this.schedulePaneResize());
+    if (this.isMobile() && this.mobileTab() === 'map') {
+      this.chartTabNeedsAttention.set(true);
     }
     void this.loadPointSeries(location);
   }
@@ -126,10 +130,19 @@ export class Home implements OnInit {
 
     if (tab === 'chart' && this.mobileTab() === 'map') {
       this.stopPlay();
+      this.chartTabNeedsAttention.set(false);
+    }
+
+    if (tab === 'map') {
+      this.cancelGeolocationRequest();
     }
 
     this.mobileTab.set(tab);
     requestAnimationFrame(() => this.schedulePaneResize());
+
+    if (tab === 'chart' && !this.selectedLocation()) {
+      void this.requestBrowserGeolocation();
+    }
   }
 
   private schedulePaneResize(): void {
@@ -493,6 +506,55 @@ export class Home implements OnInit {
     const lat = location.lat.toFixed(3);
     const lng = location.lng.toFixed(3);
     return `${lat}°N, ${lng}°E`;
+  }
+
+  private cancelGeolocationRequest(): void {
+    this.geolocationLoadToken += 1;
+    this.geolocationLoading.set(false);
+  }
+
+  private async requestBrowserGeolocation(): Promise<void> {
+    this.cancelGeolocationRequest();
+    const token = this.geolocationLoadToken;
+    this.geolocationError.set(null);
+
+    if (!navigator.geolocation) {
+      this.geolocationError.set('Locatiebepaling wordt niet ondersteund door je browser.');
+      return;
+    }
+
+    this.geolocationLoading.set(true);
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: GEOLOCATION_TIMEOUT_MS,
+          maximumAge: 60_000,
+        });
+      });
+
+      if (token !== this.geolocationLoadToken) {
+        return;
+      }
+
+      this.onMapClick({
+        lng: position.coords.longitude,
+        lat: position.coords.latitude,
+      });
+    } catch {
+      if (token !== this.geolocationLoadToken) {
+        return;
+      }
+
+      this.geolocationError.set(
+        'Kan je locatie niet bepalen. Kies handmatig een punt op de kaart.',
+      );
+    } finally {
+      if (token === this.geolocationLoadToken) {
+        this.geolocationLoading.set(false);
+      }
+    }
   }
 
   private async loadPointSeries(location: MapLocation): Promise<void> {

@@ -19,6 +19,7 @@
 
 .mobile-tabs__button {
   flex: 1;
+  position: relative;
   border: 0;
   border-radius: 999px;
   padding: 0.35rem 0.75rem;
@@ -27,6 +28,34 @@
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.mobile-tabs__button--attention {
+  animation: chart-tab-pulse 1.2s ease-in-out 3;
+}
+
+.mobile-tabs__button--attention::after {
+  content: '';
+  position: absolute;
+  top: 0.3rem;
+  right: 0.55rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #1d4ed8;
+}
+
+@keyframes chart-tab-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(29, 78, 216, 0);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.25);
+    transform: scale(1.02);
+  }
 }
 
 .mobile-tabs__button--active {

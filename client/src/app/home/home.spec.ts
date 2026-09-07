@@ -235,9 +235,17 @@ describe('Home playback', () => {
 describe('Home mobile tabs', () => {
   let fixture: ComponentFixture<Home>;
   let home: Home;
+  let getCurrentPositionSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     mobileMatches$.next({ matches: true, breakpoints: {} });
+
+    getCurrentPositionSpy = vi.fn();
+    vi.stubGlobal('navigator', {
+      geolocation: {
+        getCurrentPosition: getCurrentPositionSpy,
+      },
+    });
 
     const radarService = {
       getProbabilityTimeline: vi.fn(() => NEVER),
@@ -263,19 +271,41 @@ describe('Home mobile tabs', () => {
     fixture.detectChanges();
   });
 
-  it('switches to the chart tab after a map click on mobile', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  async function flushAsync(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  it('stays on the map tab and highlights the chart tab after a map click on mobile', () => {
     expect(home.mobileTab()).toBe('map');
+    expect(home.chartTabNeedsAttention()).toBe(false);
 
     home.onMapClick({ lat: 52.2, lng: 5.3 });
 
-    expect(home.mobileTab()).toBe('chart');
+    expect(home.mobileTab()).toBe('map');
+    expect(home.chartTabNeedsAttention()).toBe(true);
     expect(home.selectedLocation()).toEqual({ lat: 52.2, lng: 5.3 });
+  });
+
+  it('clears the chart tab attention flag when opening the chart tab', () => {
+    home.onMapClick({ lat: 52.2, lng: 5.3 });
+    expect(home.chartTabNeedsAttention()).toBe(true);
+
+    home.onMobileTabChange('chart');
+
+    expect(home.chartTabNeedsAttention()).toBe(false);
+    expect(home.mobileTab()).toBe('chart');
   });
 
   it('allows switching back to the map tab after selecting a location', () => {
     home.onMapClick({ lat: 52.2, lng: 5.3 });
-    expect(home.mobileTab()).toBe('chart');
+    expect(home.mobileTab()).toBe('map');
 
+    home.onMobileTabChange('chart');
     home.onMobileTabChange('map');
 
     expect(home.mobileTab()).toBe('map');
@@ -289,6 +319,53 @@ describe('Home mobile tabs', () => {
     home.onMobileTabChange('chart');
 
     expect(home.playing()).toBe(false);
+  });
+
+  it('requests browser geolocation when opening the chart tab without a location', async () => {
+    getCurrentPositionSpy.mockImplementation((success: PositionCallback) => {
+      success({
+        coords: {
+          latitude: 52.1,
+          longitude: 5.2,
+          accuracy: 10,
+          altitude: null,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+          toJSON: () => ({}),
+        },
+        timestamp: Date.now(),
+        toJSON: () => ({}),
+      } as GeolocationPosition);
+    });
+
+    home.onMobileTabChange('chart');
+    await flushAsync();
+
+    expect(getCurrentPositionSpy).toHaveBeenCalledOnce();
+    expect(home.mobileTab()).toBe('chart');
+    expect(home.selectedLocation()).toEqual({ lat: 52.1, lng: 5.2 });
+  });
+
+  it('keeps the user on the chart tab when geolocation fails', async () => {
+    getCurrentPositionSpy.mockImplementation(
+      (_success: PositionCallback, error: PositionErrorCallback) => {
+        error({
+          code: 1,
+          message: 'User denied geolocation',
+          PERMISSION_DENIED: 1,
+          POSITION_UNAVAILABLE: 2,
+          TIMEOUT: 3,
+        });
+      },
+    );
+
+    home.onMobileTabChange('chart');
+    await flushAsync();
+
+    expect(home.mobileTab()).toBe('chart');
+    expect(home.selectedLocation()).toBeNull();
+    expect(home.geolocationError()).toContain('Kan je locatie niet bepalen');
   });
 });
 

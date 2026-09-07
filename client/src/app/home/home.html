@@ -16,7 +16,9 @@
         class="mobile-tabs__button"
         role="tab"
         [class.mobile-tabs__button--active]="mobileTab() === 'chart'"
+        [class.mobile-tabs__button--attention]="chartTabNeedsAttention()"
         [attr.aria-selected]="mobileTab() === 'chart'"
+        [attr.aria-label]="chartTabNeedsAttention() ? 'Grafiek, locatie geselecteerd' : 'Grafiek'"
         (click)="onMobileTabChange('chart')"
       >
         Grafiek
@@ -70,14 +72,18 @@
     >
       @if (isMobile() && mobileTab() === 'chart' && !selectedLocation()) {
         <div class="chart-empty">
-          <p class="chart-empty__text">Tik op de kaart om een locatie te kiezen.</p>
-          <button
-            type="button"
-            class="chart-empty__button"
-            (click)="onMobileTabChange('map')"
-          >
-            Naar de kaart
-          </button>
+          @if (geolocationLoading()) {
+            <p class="chart-empty__text">Locatie ophalen…</p>
+          } @else if (geolocationError()) {
+            <p class="chart-empty__text">{{ geolocationError() }}</p>
+            <button
+              type="button"
+              class="chart-empty__button"
+              (click)="onMobileTabChange('map')"
+            >
+              Naar de kaart
+            </button>
+          }
         </div>
       }
 
