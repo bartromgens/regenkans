@@ -55,16 +55,25 @@ def health_check(request):
     return Response({"status": "ok"})
 
 
+def _timeline_window(request) -> tuple[int, int | None]:
+    hours = int(request.query_params.get("hours", 24))
+    future_hours_param = request.query_params.get("future_hours")
+    future_hours = int(future_hours_param) if future_hours_param is not None else None
+    return hours, future_hours
+
+
 @api_view(["GET"])
 def radar_timeline(request):
-    hours = int(request.query_params.get("hours", 24))
-    return Response(serialize_timeline(hours=hours))
+    hours, future_hours = _timeline_window(request)
+    return Response(serialize_timeline(hours=hours, future_hours=future_hours))
 
 
 @api_view(["GET"])
 def ensemble_timeline(request):
-    hours = int(request.query_params.get("hours", 24))
-    return Response(serialize_probability_timeline(hours=hours))
+    hours, future_hours = _timeline_window(request)
+    return Response(
+        serialize_probability_timeline(hours=hours, future_hours=future_hours)
+    )
 
 
 @api_view(["GET"])
@@ -141,9 +150,7 @@ def radar_point(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    hours = int(request.query_params.get("hours", 24))
-    future_hours_param = request.query_params.get("future_hours")
-    future_hours = int(future_hours_param) if future_hours_param is not None else None
+    hours, future_hours = _timeline_window(request)
     return Response(
         build_point_series(lat, lng, hours=hours, future_hours=future_hours)
     )

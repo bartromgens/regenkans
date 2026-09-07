@@ -46,6 +46,11 @@ export interface PointSeriesResponse {
   points: PointSeriesPoint[];
 }
 
+/** History and ensemble forecast window on the slider and default chart. */
+export const TIMELINE_WINDOW_HOURS = 4;
+/** Radar nowcast forecast window on the intensity slider. */
+export const NOWCAST_FORECAST_HOURS = 2;
+
 interface BboxResponse {
   bbox: [number, number, number, number];
 }
@@ -66,9 +71,15 @@ export class RadarService {
     });
   }
 
-  getProbabilityTimeline(hours = 6): Observable<ProbabilityTimelineResponse> {
+  getProbabilityTimeline(
+    hours = TIMELINE_WINDOW_HOURS,
+    futureHours = TIMELINE_WINDOW_HOURS,
+  ): Observable<ProbabilityTimelineResponse> {
     return this.http.get<ProbabilityTimelineResponse>('/api/ensemble/timeline/', {
-      params: { hours: String(hours) },
+      params: {
+        hours: String(hours),
+        future_hours: String(futureHours),
+      },
     });
   }
 

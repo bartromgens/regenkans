@@ -40,7 +40,7 @@ vi.mock('maplibre-gl', () => {
   };
 });
 
-import { Home } from './home';
+import { framesForSliderMode, Home } from './home';
 import { RadarService, TimelineSlot } from '../radar/radar.service';
 
 const mobileMatches$ = new BehaviorSubject({ matches: false, breakpoints: {} });
@@ -530,5 +530,103 @@ describe('Home mobile map click on desktop', () => {
 
     expect(home.mobileTab()).toBe('map');
     expect(home.selectedLocation()).toEqual({ lat: 52.2, lng: 5.3 });
+  });
+});
+
+describe('framesForSliderMode', () => {
+  const observed = makeFrame(0);
+  observed.kind = 'observed';
+  observed.valid_at = '2026-08-30T12:00:00Z';
+
+  const nowcast = makeFrame(1);
+  nowcast.valid_at = '2026-08-30T13:30:00Z';
+
+  const lateNowcast = makeFrame(2);
+  lateNowcast.valid_at = '2026-08-30T14:30:00Z';
+
+  const ensembleOnly = makeFrame(3);
+  ensembleOnly.valid_at = '2026-08-30T15:30:00Z';
+  ensembleOnly.intensity = null;
+  ensembleOnly.probability = {
+    issued_at: '2026-08-30T12:00:00Z',
+    lead_minutes: 210,
+    image_url: '/api/ensemble/3.png',
+    bbox_url: '/api/ensemble/3.bbox',
+    bbox: [3, 50, 7, 54],
+  };
+
+  const frames = [observed, nowcast, lateNowcast, ensembleOnly];
+
+  it('keeps the full ensemble forecast in probability mode', () => {
+    expect(framesForSliderMode(frames, 'probability')).toEqual(frames);
+    expect(framesForSliderMode(frames, 'expected')).toEqual(frames);
+  });
+
+  it('limits the intensity slider to two hours of nowcast', () => {
+    expect(framesForSliderMode(frames, 'intensity')).toEqual([observed, nowcast]);
+  });
+});
+
+describe('Home intensity slider window', () => {
+  let fixture: ComponentFixture<Home>;
+  let home: Home;
+
+  beforeEach(async () => {
+    mobileMatches$.next({ matches: false, breakpoints: {} });
+
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() => NEVER),
+      resolveBbox: vi.fn().mockResolvedValue([3, 50, 7, 54]),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(Home);
+    home = fixture.componentInstance;
+
+    const observed: TimelineSlot = {
+      ...makeFrame(0),
+      kind: 'observed',
+      valid_at: '2026-08-30T12:00:00Z',
+    };
+    const nowcast: TimelineSlot = { ...makeFrame(1), valid_at: '2026-08-30T13:30:00Z' };
+    const ensembleOnly: TimelineSlot = {
+      ...makeFrame(2),
+      valid_at: '2026-08-30T15:30:00Z',
+      intensity: null,
+      probability: {
+        issued_at: '2026-08-30T12:00:00Z',
+        lead_minutes: 210,
+        image_url: '/api/ensemble/2.png',
+        bbox_url: '/api/ensemble/2.bbox',
+        bbox: [3, 50, 7, 54],
+      },
+    };
+
+    home.frames.set([observed, nowcast, ensembleOnly]);
+    home.ensembleAvailable.set(true);
+    home.loading.set(false);
+    home.mode.set('probability');
+    home.selectedIndex.set(2);
+  });
+
+  it('clamps the selection when switching to intensity nowcast', async () => {
+    expect(home.sliderFrames().length).toBe(3);
+
+    await home.setMode('intensity');
+
+    expect(home.sliderFrames().map((frame) => frame.valid_at)).toEqual([
+      '2026-08-30T12:00:00Z',
+      '2026-08-30T13:30:00Z',
+    ]);
+    expect(home.selectedIndex()).toBe(1);
   });
 });

@@ -34,7 +34,7 @@ class TimelineSlot:
 
 
 def build_unified_timeline(
-    *, hours: int = 24
+    *, hours: int = 24, future_hours: int | None = None
 ) -> tuple[datetime | None, list[TimelineSlot], bool]:
     latest_radar = (
         RadarForecast.objects.filter(status=RadarForecast.Status.PARSED)
@@ -54,6 +54,7 @@ def build_unified_timeline(
 
     now = latest_radar.issued_at
     cutoff = now - timedelta(hours=hours)
+    future_cutoff = now + timedelta(hours=future_hours) if future_hours is not None else None
     past_forecasts = (
         RadarForecast.objects.filter(
             status=RadarForecast.Status.PARSED,
@@ -83,6 +84,8 @@ def build_unified_timeline(
     for step in latest_radar.steps.all():
         if step.lead_minutes == 0:
             continue
+        if future_cutoff is not None and step.valid_at > future_cutoff:
+            continue
         future_valid_at.add(step.valid_at)
         radar_future_steps[step.valid_at] = (latest_radar, step.lead_minutes)
 
@@ -90,6 +93,8 @@ def build_unified_timeline(
     if latest_ensemble is not None:
         for step in latest_ensemble.steps.all():
             if step.valid_at <= now:
+                continue
+            if future_cutoff is not None and step.valid_at > future_cutoff:
                 continue
             future_valid_at.add(step.valid_at)
             ensemble_future_steps[step.valid_at] = (
@@ -123,19 +128,21 @@ def build_unified_timeline(
     return now, slots, latest_ensemble is not None
 
 
-def build_timeline(*, hours: int = 24) -> tuple[datetime | None, list[TimelineSlot]]:
-    now, slots, _ = build_unified_timeline(hours=hours)
+def build_timeline(
+    *, hours: int = 24, future_hours: int | None = None
+) -> tuple[datetime | None, list[TimelineSlot]]:
+    now, slots, _ = build_unified_timeline(hours=hours, future_hours=future_hours)
     return now, slots
 
 
 def build_probability_timeline(
-    *, hours: int = 24
+    *, hours: int = 24, future_hours: int | None = None
 ) -> tuple[datetime | None, list[TimelineSlot], bool]:
-    return build_unified_timeline(hours=hours)
+    return build_unified_timeline(hours=hours, future_hours=future_hours)
 
 
-def serialize_timeline(*, hours: int = 24) -> dict:
-    now, slots = build_timeline(hours=hours)
+def serialize_timeline(*, hours: int = 24, future_hours: int | None = None) -> dict:
+    now, slots = build_timeline(hours=hours, future_hours=future_hours)
     return {
         "generated_at": timezone.now().isoformat(),
         "now": now.isoformat() if now else None,
@@ -143,8 +150,12 @@ def serialize_timeline(*, hours: int = 24) -> dict:
     }
 
 
-def serialize_probability_timeline(*, hours: int = 24) -> dict:
-    now, slots, ensemble_available = build_probability_timeline(hours=hours)
+def serialize_probability_timeline(
+    *, hours: int = 24, future_hours: int | None = None
+) -> dict:
+    now, slots, ensemble_available = build_probability_timeline(
+        hours=hours, future_hours=future_hours
+    )
     return {
         "generated_at": timezone.now().isoformat(),
         "now": now.isoformat() if now else None,

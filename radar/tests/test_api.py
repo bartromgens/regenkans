@@ -243,6 +243,30 @@ class EnsembleApiTests(TestCase):
 
         self.assertEqual(radar_valid_at, ensemble_valid_at)
 
+    def test_ensemble_timeline_future_hours_limits_forecast_slots(self):
+        _, radar_issued = self._seed_radar_and_ensemble()
+
+        full_response = self.client.get(reverse("ensemble-timeline"), {"hours": 1})
+        capped_response = self.client.get(
+            reverse("ensemble-timeline"),
+            {"hours": 1, "future_hours": 4},
+        )
+
+        self.assertEqual(full_response.status_code, 200)
+        self.assertEqual(capped_response.status_code, 200)
+
+        full_frames = full_response.json()["frames"]
+        capped_frames = capped_response.json()["frames"]
+        future_cutoff = radar_issued + timedelta(hours=4)
+
+        self.assertLess(len(capped_frames), len(full_frames))
+        self.assertTrue(
+            all(
+                datetime.fromisoformat(frame["valid_at"]) <= future_cutoff
+                for frame in capped_frames
+            )
+        )
+
     def test_ensemble_frame_endpoint_renders_png(self):
         ensemble, _ = self._seed_radar_and_ensemble(aligned=False)
 

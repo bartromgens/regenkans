@@ -12,7 +12,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 
 ## Timeline / Map
 
-- [x] Reduce the timeline slider history to 6 hours by default
+- [x] Reduce the timeline slider history to 4 hours by default
 - [ ] Advanced 'history' page that allows users to select any date available in our database, and shows the full 24 hour in a slider
 - [x] Add a play button that animates the map timeline
 - [ ] Show individual ensemble member forecasts (spaghetti plot / step-through) at a clicked point, instead of only the aggregated probability — the per-member data is already read from the NetCDF file, just currently discarded after being collapsed into the % probability
