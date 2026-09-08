@@ -45,6 +45,7 @@
           <app-mode-toggle
             [mode]="mode()"
             [ensembleAvailable]="ensembleAvailable()"
+            [knmiEnsembleUnavailable]="knmiEnsembleUnavailable()"
             (modeChange)="setMode($event)"
           />
 

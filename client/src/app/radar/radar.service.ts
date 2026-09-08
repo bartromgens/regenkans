@@ -29,6 +29,7 @@ export interface RadarTimelineResponse {
 
 export interface ProbabilityTimelineResponse extends RadarTimelineResponse {
   ensemble_available: boolean;
+  knmi_ensemble_unavailable: boolean;
 }
 
 export interface PointSeriesPoint {

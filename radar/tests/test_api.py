@@ -216,6 +216,7 @@ class EnsembleApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertTrue(payload["ensemble_available"])
+        self.assertFalse(payload["knmi_ensemble_unavailable"])
         self.assertIsNotNone(payload["frames"][0]["intensity"])
         self.assertIsNone(payload["frames"][0]["probability"])
         self.assertIsNotNone(payload["frames"][1]["intensity"])

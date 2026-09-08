@@ -51,7 +51,11 @@
 
   @if (!ensembleAvailable()) {
     <div class="mode-toggle-hint">
-      Kansweergave vereist een geïmporteerde ensembleverwachting.
+      @if (knmiEnsembleUnavailable()) {
+        KNMI-kansverwachting is momenteel niet beschikbaar. De radar-nowcast wordt getoond.
+      } @else {
+        Kansweergave vereist een geïmporteerde ensembleverwachting.
+      }
     </div>
   }
 </div>

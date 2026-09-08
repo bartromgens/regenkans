@@ -8,7 +8,7 @@ from django.db import transaction
 from django.utils.dateparse import parse_datetime
 
 from radar.knmi import KnmiApiError, KnmiOpenDataClient, parse_ensemble_filename_issued_at
-from radar.models import EnsembleForecast, EnsembleForecastStep
+from radar.models import EnsembleForecast, EnsembleForecastStep, EnsembleIngestState
 from radar.netcdf import parse_ensemble_forecast_netcdf
 
 
@@ -43,6 +43,27 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        checked_latest = not options["filename"] and not options["since"]
+        try:
+            ingested, skipped, failed = self._run(options)
+        except Exception as exc:
+            if checked_latest:
+                EnsembleIngestState.record(success=False, error=str(exc))
+            raise
+
+        if checked_latest:
+            EnsembleIngestState.record(
+                success=failed == 0,
+                error="" if failed == 0 else f"{failed} file(s) failed",
+            )
+
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Done. ingested={ingested} skipped={skipped} failed={failed}"
+            )
+        )
+
+    def _run(self, options) -> tuple[int, int, int]:
         api_key = getattr(settings, "KNMI_OPEN_DATA_API_KEY", "")
         if not api_key:
             raise CommandError(
@@ -66,7 +87,7 @@ class Command(BaseCommand):
 
         if not files:
             self.stdout.write("No files to ingest.")
-            return
+            return 0, 0, 0
 
         ingested = 0
         skipped = 0
@@ -86,11 +107,7 @@ class Command(BaseCommand):
             else:
                 failed += 1
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                f"Done. ingested={ingested} skipped={skipped} failed={failed}"
-            )
-        )
+        return ingested, skipped, failed
 
     def _files_latest(self, client: KnmiOpenDataClient, limit: int | None):
         params = {"maxKeys": limit or 1, "orderBy": "created", "sorting": "desc"}

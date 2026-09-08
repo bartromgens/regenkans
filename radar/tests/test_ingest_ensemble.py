@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase, override_settings
 
-from radar.knmi import KnmiFileInfo, parse_ensemble_filename_issued_at
-from radar.models import EnsembleForecast, EnsembleForecastStep
+from radar.knmi import KnmiApiError, KnmiFileInfo, parse_ensemble_filename_issued_at
+from radar.models import EnsembleForecast, EnsembleForecastStep, EnsembleIngestState
 from radar.netcdf import parse_ensemble_forecast_netcdf
 from radar.tests.fixtures import create_live_ensemble_forecast_nc, create_sample_ensemble_forecast_nc
 
@@ -122,6 +122,9 @@ class IngestEnsembleCommandTests(TestCase):
             forecast.issued_at,
             datetime(2026, 8, 23, 21, 20, tzinfo=timezone.utc),
         )
+        state = EnsembleIngestState.objects.get(pk=EnsembleIngestState.SINGLETON_PK)
+        self.assertTrue(state.success)
+        self.assertEqual(state.error, "")
 
     @patch("radar.management.commands.ingest_ensemble_forecast.KnmiOpenDataClient")
     def test_ingest_skips_already_parsed_file(self, client_cls):
@@ -159,3 +162,42 @@ class IngestEnsembleCommandTests(TestCase):
         client.download_file.assert_not_called()
         self.assertEqual(EnsembleForecast.objects.count(), 1)
         self.assertEqual(EnsembleForecastStep.objects.count(), 1)
+        self.assertTrue(EnsembleIngestState.last_latest_ingest_succeeded())
+
+    @patch("radar.management.commands.ingest_ensemble_forecast.KnmiOpenDataClient")
+    def test_ingest_records_failure_when_listing_latest_fails(self, client_cls):
+        client = client_cls.return_value
+        client.iter_files.side_effect = KnmiApiError("Rate Limit Exceeded")
+
+        with self.assertRaises(KnmiApiError):
+            call_command("ingest_ensemble_forecast")
+
+        self.assertFalse(EnsembleIngestState.last_latest_ingest_succeeded())
+        state = EnsembleIngestState.objects.get(pk=EnsembleIngestState.SINGLETON_PK)
+        self.assertFalse(state.success)
+        self.assertEqual(state.error, "Rate Limit Exceeded")
+
+    @patch("radar.management.commands.ingest_ensemble_forecast.KnmiOpenDataClient")
+    def test_filename_ingest_does_not_record_latest_state(self, client_cls):
+        sample_path = create_sample_ensemble_forecast_nc(
+            self.data_dir / self.filename,
+            step_count=3,
+            member_count=2,
+        )
+        file_info = KnmiFileInfo(
+            filename=self.filename,
+            size=sample_path.stat().st_size,
+            created=datetime(2026, 8, 23, 21, 21, 45, tzinfo=timezone.utc),
+            last_modified=datetime(2026, 8, 23, 21, 21, 45, tzinfo=timezone.utc),
+        )
+        client = client_cls.return_value
+        client.list_files.return_value = {"files": [{"filename": self.filename}]}
+        client.iter_files.return_value = [file_info]
+        client.download_file.side_effect = (
+            lambda filename, destination: destination.write_bytes(sample_path.read_bytes())
+            or destination
+        )
+
+        call_command("ingest_ensemble_forecast", filename=self.filename)
+
+        self.assertFalse(EnsembleIngestState.objects.exists())

@@ -77,6 +77,7 @@ export class Home implements OnInit {
   readonly currentLabel = signal('');
   readonly mode = signal<OverlayMode>('probability');
   readonly ensembleAvailable = signal(false);
+  readonly knmiEnsembleUnavailable = signal(false);
   readonly overlay = signal<RadarOverlay | null>(null);
   readonly selectedLocation = signal<MapLocation | null>(null);
   readonly pointSeries = signal<PointSeriesPoint[]>([]);
@@ -341,6 +342,7 @@ export class Home implements OnInit {
       });
 
       this.ensembleAvailable.set(timeline.ensemble_available);
+      this.knmiEnsembleUnavailable.set(Boolean(timeline.knmi_ensemble_unavailable));
       if (!timeline.ensemble_available) {
         this.mode.set('intensity');
       }

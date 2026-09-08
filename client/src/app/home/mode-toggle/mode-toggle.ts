@@ -11,6 +11,7 @@ import { OverlayMode } from '../../radar/radar.service';
 export class ModeToggle {
   readonly mode = input.required<OverlayMode>();
   readonly ensembleAvailable = input(false);
+  readonly knmiEnsembleUnavailable = input(false);
 
   readonly modeChange = output<OverlayMode>();
 

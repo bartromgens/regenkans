@@ -43,6 +43,20 @@ vi.mock('maplibre-gl', () => {
 import { framesForSliderMode, Home } from './home';
 import { RadarService, TimelineSlot } from '../radar/radar.service';
 
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: (query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    dispatchEvent: () => false,
+  }),
+});
+
 const mobileMatches$ = new BehaviorSubject({ matches: false, breakpoints: {} });
 
 const breakpointObserver = {
@@ -379,6 +393,7 @@ describe('Home mobile autoplay', () => {
       generated_at: new Date(now).toISOString(),
       now: new Date(now).toISOString(),
       ensemble_available: false,
+      knmi_ensemble_unavailable: false,
       frames: [-20, -10, 0, 10, 20].map((minutes, index) => ({
         ...makeFrame(index),
         valid_at: new Date(now + minutes * 60_000).toISOString(),
@@ -530,6 +545,79 @@ describe('Home mobile map click on desktop', () => {
 
     expect(home.mobileTab()).toBe('map');
     expect(home.selectedLocation()).toEqual({ lat: 52.2, lng: 5.3 });
+  });
+});
+
+describe('Home KNMI ensemble fallback', () => {
+  async function flushAsync(): Promise<void> {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function loadHome(timeline: {
+    ensemble_available: boolean;
+    knmi_ensemble_unavailable: boolean;
+  }): Promise<Home> {
+    vi.useFakeTimers();
+    mobileMatches$.next({ matches: false, breakpoints: {} });
+
+    const now = Date.now();
+    const radarService = {
+      getProbabilityTimeline: vi.fn(() =>
+        of({
+          generated_at: new Date(now).toISOString(),
+          now: new Date(now).toISOString(),
+          ensemble_available: timeline.ensemble_available,
+          knmi_ensemble_unavailable: timeline.knmi_ensemble_unavailable,
+          frames: [-20, -10, 0, 10, 20].map((minutes, index) => ({
+            ...makeFrame(index),
+            valid_at: new Date(now + minutes * 60_000).toISOString(),
+          })),
+        }),
+      ),
+      resolveBbox: vi.fn().mockResolvedValue([3, 50, 7, 54]),
+      prefetchFrame: vi.fn(),
+    };
+
+    await TestBed.configureTestingModule({
+      imports: [Home],
+      providers: [
+        provideHttpClient(),
+        { provide: RadarService, useValue: radarService },
+        { provide: BreakpointObserver, useValue: breakpointObserver },
+      ],
+    }).compileComponents();
+
+    const fixture = TestBed.createComponent(Home);
+    fixture.detectChanges();
+    await flushAsync();
+    return fixture.componentInstance;
+  }
+
+  it('falls back to nowcast and reports KNMI after a successful stale ingest', async () => {
+    const home = await loadHome({
+      ensemble_available: false,
+      knmi_ensemble_unavailable: true,
+    });
+
+    expect(home.mode()).toBe('intensity');
+    expect(home.knmiEnsembleUnavailable()).toBe(true);
+    expect(home.ensembleAvailable()).toBe(false);
+  });
+
+  it('falls back to nowcast without blaming KNMI when ingest did not succeed', async () => {
+    const home = await loadHome({
+      ensemble_available: false,
+      knmi_ensemble_unavailable: false,
+    });
+
+    expect(home.mode()).toBe('intensity');
+    expect(home.knmiEnsembleUnavailable()).toBe(false);
   });
 });
 

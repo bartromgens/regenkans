@@ -3,6 +3,7 @@ from django.contrib import admin
 from radar.models import (
     EnsembleForecast,
     EnsembleForecastStep,
+    EnsembleIngestState,
     RadarForecast,
     RadarForecastStep,
 )
@@ -92,3 +93,15 @@ class EnsembleForecastStepAdmin(admin.ModelAdmin):
     list_display = ("forecast", "lead_minutes", "valid_at")
     list_filter = ("lead_minutes",)
     search_fields = ("forecast__filename",)
+
+
+@admin.register(EnsembleIngestState)
+class EnsembleIngestStateAdmin(admin.ModelAdmin):
+    list_display = ("finished_at", "success", "error")
+    readonly_fields = ("finished_at", "success", "error")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

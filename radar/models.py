@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 
 class RadarForecast(models.Model):
@@ -105,3 +106,37 @@ class EnsembleForecastStep(models.Model):
 
     def __str__(self) -> str:
         return f"{self.forecast.filename} +{self.lead_minutes}m"
+
+
+class EnsembleIngestState(models.Model):
+    """Outcome of the most recent attempt to fetch KNMI's latest ensemble file."""
+
+    SINGLETON_PK = 1
+
+    finished_at = models.DateTimeField()
+    success = models.BooleanField()
+    error = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Ensemble-ingeststatus"
+        verbose_name_plural = "Ensemble-ingeststatus"
+
+    def __str__(self) -> str:
+        status = "geslaagd" if self.success else "mislukt"
+        return f"Laatste ensemble-ingest ({status})"
+
+    @classmethod
+    def record(cls, *, success: bool, error: str = "") -> None:
+        cls.objects.update_or_create(
+            pk=cls.SINGLETON_PK,
+            defaults={
+                "finished_at": timezone.now(),
+                "success": success,
+                "error": error,
+            },
+        )
+
+    @classmethod
+    def last_latest_ingest_succeeded(cls) -> bool:
+        row = cls.objects.filter(pk=cls.SINGLETON_PK).first()
+        return bool(row and row.success)

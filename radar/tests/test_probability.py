@@ -7,7 +7,13 @@ from unittest.mock import patch
 from django.test import TestCase, override_settings
 
 import radar.render as render_module
-from radar.models import EnsembleForecast, EnsembleForecastStep, RadarForecast, RadarForecastStep
+from radar.models import (
+    EnsembleForecast,
+    EnsembleForecastStep,
+    EnsembleIngestState,
+    RadarForecast,
+    RadarForecastStep,
+)
 from radar.netcdf import read_probability_of_precipitation
 from radar.probability import probability_frame_cache_path, render_probability_frame
 from radar.tests.fixtures import (
@@ -15,7 +21,11 @@ from radar.tests.fixtures import (
     create_sample_ensemble_forecast_nc,
     create_sample_radar_forecast_h5,
 )
-from radar.timeline import build_probability_timeline, build_unified_timeline
+from radar.timeline import (
+    build_probability_timeline,
+    build_unified_timeline,
+    serialize_probability_timeline,
+)
 
 
 @override_settings(KNMI_ENSEMBLE_FORECAST_DATA_DIR=Path("/tmp/regenkans-pop-test"))
@@ -264,6 +274,51 @@ class ProbabilityTimelineTests(TestCase):
         self.assertTrue(all(slot.expected is not None for slot in far_future))
 
     def test_stale_ensemble_steps_are_not_included(self):
+        self._seed_stale_ensemble()
+        radar_issued = datetime(2026, 8, 30, 14, 45, tzinfo=timezone.utc)
+
+        _, slots, ensemble_available = build_unified_timeline(hours=24)
+
+        self.assertTrue(all(slot.valid_at >= radar_issued for slot in slots if slot.kind == "forecast"))
+        self.assertTrue(all(slot.probability is None for slot in slots))
+        self.assertFalse(ensemble_available)
+
+    def test_fresh_ensemble_is_available_after_successful_ingest(self):
+        self._seed_radar_and_ensemble()
+        EnsembleIngestState.record(success=True)
+
+        payload = serialize_probability_timeline(hours=24)
+
+        self.assertTrue(payload["ensemble_available"])
+        self.assertFalse(payload["knmi_ensemble_unavailable"])
+
+    def test_stale_ensemble_is_unavailable_after_successful_ingest(self):
+        self._seed_stale_ensemble()
+        EnsembleIngestState.record(success=True)
+
+        payload = serialize_probability_timeline(hours=24)
+
+        self.assertFalse(payload["ensemble_available"])
+        self.assertTrue(payload["knmi_ensemble_unavailable"])
+
+    def test_stale_ensemble_does_not_blame_knmi_after_failed_ingest(self):
+        self._seed_stale_ensemble()
+        EnsembleIngestState.record(success=False, error="download failed")
+
+        payload = serialize_probability_timeline(hours=24)
+
+        self.assertFalse(payload["ensemble_available"])
+        self.assertFalse(payload["knmi_ensemble_unavailable"])
+
+    def test_stale_ensemble_does_not_blame_knmi_before_ingest_runs(self):
+        self._seed_stale_ensemble()
+
+        payload = serialize_probability_timeline(hours=24)
+
+        self.assertFalse(payload["ensemble_available"])
+        self.assertFalse(payload["knmi_ensemble_unavailable"])
+
+    def _seed_stale_ensemble(self):
         radar_path = create_sample_radar_forecast_h5(
             self.radar_dir / "RAD_NL25_RAC_FM_202608301445.h5",
             step_count=25,
@@ -309,8 +364,3 @@ class ProbabilityTimelineTests(TestCase):
                 lead_minutes=lead,
                 valid_at=ensemble_issued + timedelta(minutes=lead),
             )
-
-        _, slots, _ = build_unified_timeline(hours=24)
-
-        self.assertTrue(all(slot.valid_at >= radar_issued for slot in slots if slot.kind == "forecast"))
-        self.assertTrue(all(slot.probability is None for slot in slots))

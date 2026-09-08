@@ -7,7 +7,7 @@ from typing import Literal
 from django.utils import timezone
 
 from radar.expected import expected_frame_cache_path
-from radar.models import EnsembleForecast, RadarForecast
+from radar.models import EnsembleForecast, EnsembleIngestState, RadarForecast
 from radar.probability import probability_frame_cache_path
 from radar.render import frame_cache_path, read_cached_bbox
 
@@ -50,7 +50,7 @@ def build_unified_timeline(
     )
 
     if latest_radar is None:
-        return None, [], latest_ensemble is not None
+        return None, [], False
 
     now = latest_radar.issued_at
     cutoff = now - timedelta(hours=hours)
@@ -125,7 +125,8 @@ def build_unified_timeline(
             )
         )
 
-    return now, slots, latest_ensemble is not None
+    ensemble_available = any(slot.probability is not None for slot in slots)
+    return now, slots, ensemble_available
 
 
 def build_timeline(
@@ -160,8 +161,15 @@ def serialize_probability_timeline(
         "generated_at": timezone.now().isoformat(),
         "now": now.isoformat() if now else None,
         "ensemble_available": ensemble_available,
+        "knmi_ensemble_unavailable": _knmi_ensemble_unavailable(ensemble_available),
         "frames": [_serialize_slot(slot) for slot in slots],
     }
+
+
+def _knmi_ensemble_unavailable(ensemble_available: bool) -> bool:
+    if ensemble_available:
+        return False
+    return EnsembleIngestState.last_latest_ingest_succeeded()
 
 
 def _serialize_slot(slot: TimelineSlot) -> dict:

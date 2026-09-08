@@ -106,10 +106,12 @@
 }
 
 .mode-toggle-hint {
-  padding: 0.2rem 0.5rem;
+  max-width: 22rem;
+  padding: 0.25rem 0.55rem;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.88);
   font-size: 0.65rem;
+  line-height: 1.35;
   color: #64748b;
   text-align: center;
   pointer-events: auto;
