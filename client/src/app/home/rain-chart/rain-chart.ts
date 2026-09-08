@@ -21,7 +21,7 @@ import {
   Filler,
 } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
-import { PointSeriesPoint, TIMELINE_WINDOW_HOURS } from '../../radar/radar.service';
+import { PointSeriesPoint } from '../../radar/radar.service';
 
 Chart.register(
   LineController,
@@ -36,7 +36,9 @@ Chart.register(
 
 const HOUR_MS = 60 * 60 * 1000;
 export const CHART_WINDOW_BEFORE_HOURS = 1;
-export const CHART_WINDOW_AFTER_HOURS = TIMELINE_WINDOW_HOURS;
+// Kept independent from the map/slider window (TIMELINE_WINDOW_HOURS): a
+// smaller default keeps the initial point-series request small and fast.
+export const CHART_WINDOW_AFTER_HOURS = 2;
 const WINDOW_BEFORE_MS = CHART_WINDOW_BEFORE_HOURS * HOUR_MS;
 const DEFAULT_WINDOW_AFTER_MS = CHART_WINDOW_AFTER_HOURS * HOUR_MS;
 
