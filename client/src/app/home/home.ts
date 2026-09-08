@@ -14,7 +14,6 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { map } from 'rxjs';
 import {
   FrameSource,
-  NOWCAST_FORECAST_HOURS,
   OverlayMode,
   PointSeriesPoint,
   PointSeriesResponse,
@@ -31,6 +30,7 @@ import {
   CHART_WINDOW_BEFORE_HOURS,
   RainChart,
 } from './rain-chart/rain-chart';
+import { framesForSliderMode } from './slider-frames';
 
 const SCRUB_THROTTLE_MS = 150;
 const PLAY_INTERVAL_MS = 700;
@@ -700,38 +700,6 @@ export class Home implements OnInit {
     const index = this.selectedIndex();
     return frames[index]?.valid_at ?? null;
   });
-}
-
-export function framesForSliderMode(
-  frames: TimelineSlot[],
-  mode: OverlayMode,
-): TimelineSlot[] {
-  if (mode !== 'intensity') {
-    return frames;
-  }
-
-  const originMs = lastObservedMs(frames);
-  const cutoffMs =
-    originMs === null ? null : originMs + NOWCAST_FORECAST_HOURS * HOUR_MS;
-
-  return frames.filter((slot) => {
-    if (slot.intensity === null) {
-      return false;
-    }
-    if (cutoffMs === null) {
-      return true;
-    }
-    return new Date(slot.valid_at).getTime() <= cutoffMs;
-  });
-}
-
-function lastObservedMs(frames: TimelineSlot[]): number | null {
-  for (let index = frames.length - 1; index >= 0; index--) {
-    if (frames[index].kind === 'observed') {
-      return new Date(frames[index].valid_at).getTime();
-    }
-  }
-  return null;
 }
 
 function indexForValidAt(frames: TimelineSlot[], validAt: string | null): number {

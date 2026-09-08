@@ -9,6 +9,7 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 - [x] Rename the 'verwacht' toggle to make it more descriptive
 - [x] Add an information icon next to the toggle that explains the different modes
 - [ ] Improve the plot position and layout on desktop (larger and not on top of the slider)
+- [x] Square-root chart y-axis so light rain stays visible next to a heavy peak (1 mm/u used to collapse to a few pixels when the window contained 40 mm/u)
 
 ## Timeline / Map
 

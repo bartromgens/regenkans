@@ -22,12 +22,17 @@ import {
 } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { PointSeriesPoint } from '../../radar/radar.service';
+import {
+  RAIN_INTENSITY_SCALE_ID,
+  RainIntensityScale,
+} from './intensity-scale';
 
 Chart.register(
   LineController,
   LineElement,
   PointElement,
   LinearScale,
+  RainIntensityScale,
   Tooltip,
   Legend,
   Filler,
@@ -54,11 +59,11 @@ interface IntensityBand {
 // just a darker tint: at the default axis maximum only the lightest two are in
 // view, so those two have to be told apart on their own.
 const INTENSITY_BANDS: readonly IntensityBand[] = [
-  { label: 'miezer', min: 0.1, max: 1, color: 'rgba(186, 230, 253, 0.55)' },
-  { label: 'regen', min: 1, max: 5, color: 'rgba(96, 165, 250, 0.35)' },
-  { label: 'flinke regen', min: 5, max: 10, color: 'rgba(167, 139, 250, 0.38)' },
-  { label: 'stortregen', min: 10, max: 25, color: 'rgba(248, 113, 113, 0.38)' },
-  { label: 'wolkbreuk', min: 25, max: null, color: 'rgba(251, 146, 60, 0.45)' },
+  { label: 'miezer', min: 0.1, max: 1, color: 'rgba(186, 230, 253, 0.22)' },
+  { label: 'regen', min: 1, max: 5, color: 'rgba(96, 165, 250, 0.16)' },
+  { label: 'flinke regen', min: 5, max: 10, color: 'rgba(167, 139, 250, 0.18)' },
+  { label: 'stortregen', min: 10, max: 25, color: 'rgba(248, 113, 113, 0.18)' },
+  { label: 'wolkbreuk', min: 25, max: null, color: 'rgba(251, 146, 60, 0.2)' },
 ];
 
 const BAND_BORDER_COLOR = 'rgba(100, 116, 139, 0.35)';
@@ -322,7 +327,7 @@ export class RainChart implements OnDestroy {
             },
           },
           y: {
-            type: 'linear',
+            type: RAIN_INTENSITY_SCALE_ID,
             position: 'left',
             title: {
               display: true,
