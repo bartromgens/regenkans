@@ -39,6 +39,16 @@
   text-decoration: underline;
 }
 
+@media (min-width: 641px) {
+  .app-title {
+    font-size: 19px;
+  }
+
+  .app-about-link {
+    font-size: 16px;
+  }
+}
+
 .app-content {
   flex: 1;
   overflow: hidden;

@@ -68,6 +68,7 @@ const INTENSITY_BANDS: readonly IntensityBand[] = [
 
 const BAND_BORDER_COLOR = 'rgba(100, 116, 139, 0.35)';
 const BAND_LABEL_MIN_HEIGHT_PX = 15;
+const CHART_ANNOTATION_FONT_SIZE = 12;
 const SPREAD_P25_LABEL = '__spread_p25';
 const SPREAD_BAND_LABEL = 'Spreiding (P25-P75)';
 const SPREAD_FILL_COLOR = 'rgba(5, 150, 105, 0.18)';
@@ -477,7 +478,7 @@ function buildIntensityBands() {
               xAdjust: 6,
               color: '#64748b',
               font: {
-                size: 10,
+                size: CHART_ANNOTATION_FONT_SIZE,
               },
             },
           },
@@ -562,7 +563,7 @@ function buildAnnotations(
               color: '#ffffff',
               borderRadius: 4,
               font: {
-                size: 10,
+                size: CHART_ANNOTATION_FONT_SIZE,
                 weight: 600,
               },
               padding: {
@@ -603,7 +604,7 @@ function buildAnnotations(
               color: '#ffffff',
               borderRadius: 4,
               font: {
-                size: 10,
+                size: CHART_ANNOTATION_FONT_SIZE,
                 weight: 600,
               },
               padding: {

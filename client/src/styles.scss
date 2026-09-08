@@ -19,6 +19,13 @@ html {
   );
 }
 
+// Desktop preview: scales all rem-based UI. Tweak or remove to revert.
+@media (min-width: 641px) {
+  html {
+    font-size: 118.75%;
+  }
+}
+
 body {
   // Default the application to a light color theme. This can be changed to
   // `dark` to enable the dark color theme, or to `light dark` to defer to the
