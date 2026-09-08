@@ -129,6 +129,7 @@ export class Home implements OnInit {
     if (this.isMobile() && this.mobileTab() === 'map') {
       this.chartTabNeedsAttention.set(true);
     }
+    // Start fetching chart data immediately so it is ready when the user opens the chart tab.
     void this.loadPointSeries(location);
   }
 
@@ -151,6 +152,11 @@ export class Home implements OnInit {
 
     if (tab === 'chart' && !this.selectedLocation()) {
       void this.requestBrowserGeolocation();
+      return;
+    }
+
+    if (tab === 'chart') {
+      this.ensureChartDataLoaded();
     }
   }
 
@@ -601,6 +607,20 @@ export class Home implements OnInit {
     }
   }
 
+  private ensureChartDataLoaded(): void {
+    const location = this.selectedLocation();
+    if (
+      !location ||
+      this.pointLoading() ||
+      this.pointExtending() ||
+      this.pointSeries().length > 0
+    ) {
+      return;
+    }
+
+    void this.loadPointSeries(location);
+  }
+
   private async loadPointSeries(location: MapLocation): Promise<void> {
     const token = ++this.pointLoadToken;
     this.pointLoading.set(true);
@@ -667,6 +687,13 @@ export class Home implements OnInit {
       }
     }
   }
+
+  readonly showRainChart = computed(() => {
+    if (!this.selectedLocation()) {
+      return false;
+    }
+    return !this.isMobile() || this.mobileTab() === 'chart';
+  });
 
   readonly chartMaxAvailableHours = computed(() => {
     const frames = this.frames();
