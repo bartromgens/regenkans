@@ -427,10 +427,14 @@ class RadarPointApiTests(TestCase):
         self.assertEqual(observed["intensity"], 0.0)
         self.assertIsNone(observed["probability"])
         self.assertIsNone(observed["expected"])
+        self.assertIsNone(observed["p25"])
+        self.assertIsNone(observed["p75"])
 
         forecast = next(point for point in payload["points"] if point["kind"] == "forecast")
         self.assertAlmostEqual(forecast["probability"], 0.5)
         self.assertAlmostEqual(forecast["expected"], 0.1)
+        self.assertAlmostEqual(forecast["p25"], 0.0)
+        self.assertAlmostEqual(forecast["p75"], 0.2)
 
     def test_point_endpoint_validates_coordinates(self):
         response = self.client.get(reverse("radar-point"))

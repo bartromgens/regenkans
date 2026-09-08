@@ -47,6 +47,16 @@ class PointSample:
     intensity: float | None
     probability: float | None
     expected: float | None
+    p25: float | None
+    p75: float | None
+
+
+@dataclass(frozen=True)
+class _EnsembleStats:
+    probability: float
+    expected: float
+    p25: float
+    p75: float
 
 
 def build_point_series(
@@ -66,6 +76,8 @@ def build_point_series(
             intensity = _sample_intensity(slot, lng, lat, radar_samplers)
             probability = None
             expected = None
+            p25 = None
+            p75 = None
             if slot.probability is not None:
                 ensemble_sampler = _ensure_ensemble_sampler(
                     slot.probability.image_url,
@@ -74,12 +86,14 @@ def build_point_series(
                     ensemble_sampler,
                 )
                 if ensemble_sampler is not None:
-                    probability = ensemble_sampler.probability_at_lead(
+                    stats = ensemble_sampler.stats_at_lead(
                         slot.probability.lead_minutes
                     )
-                    expected = ensemble_sampler.expected_at_lead(
-                        slot.probability.lead_minutes
-                    )
+                    if stats is not None:
+                        probability = stats.probability
+                        expected = stats.expected
+                        p25 = stats.p25
+                        p75 = stats.p75
 
             points.append(
                 PointSample(
@@ -88,6 +102,8 @@ def build_point_series(
                     intensity=intensity,
                     probability=probability,
                     expected=expected,
+                    p25=p25,
+                    p75=p75,
                 )
             )
     finally:
@@ -111,6 +127,8 @@ def _serialize_point(point: PointSample) -> dict:
         "intensity": point.intensity,
         "probability": point.probability,
         "expected": point.expected,
+        "p25": point.p25,
+        "p75": point.p75,
     }
 
 
@@ -223,12 +241,7 @@ class _EnsemblePointSampler:
     def close(self) -> None:
         self._dataset.close()
 
-    def probability_at_lead(
-        self,
-        lead_minutes: int,
-        *,
-        threshold_mm_hr: float = DEFAULT_POP_THRESHOLD_MM_HR,
-    ) -> float | None:
+    def _members_at_lead(self, lead_minutes: int) -> np.ndarray | None:
         if self._indices is None:
             return None
 
@@ -262,51 +275,43 @@ class _EnsemblePointSampler:
         if members.ndim != 1:
             raise ValueError(f"Expected 1-D member slice, got shape {members.shape}")
 
+        if not np.any(np.isfinite(members)):
+            return None
+
+        return members
+
+    def stats_at_lead(
+        self,
+        lead_minutes: int,
+        *,
+        threshold_mm_hr: float = DEFAULT_POP_THRESHOLD_MM_HR,
+    ) -> _EnsembleStats | None:
+        members = self._members_at_lead(lead_minutes)
+        if members is None:
+            return None
+
         valid = np.isfinite(members)
-        if not np.any(valid):
-            return None
-
         wet_count = np.count_nonzero(valid & (members >= threshold_mm_hr))
-        return float(wet_count / len(members))
-
-    def expected_at_lead(self, lead_minutes: int) -> float | None:
-        if self._indices is None:
-            return None
-
-        row, col = self._indices
-        time_index = _time_index_for_lead(
-            self._dataset,
-            self._time_dim,
-            self.issued_at,
-            lead_minutes,
+        p25, p75 = np.nanpercentile(members, [25, 75])
+        return _EnsembleStats(
+            probability=float(wet_count / len(members)),
+            expected=float(np.nanmean(members)),
+            p25=float(p25),
+            p75=float(p75),
         )
 
-        index: list[int | slice] = []
-        for dim_name in self._data_var.dimensions:
-            if dim_name == self._time_dim:
-                index.append(time_index)
-            elif dim_name == self._member_dim:
-                index.append(slice(None))
-            elif dim_name == self._row_dim:
-                index.append(row)
-            elif dim_name == self._col_dim:
-                index.append(col)
-            else:
-                index.append(slice(None))
+    def probability_at_lead(
+        self,
+        lead_minutes: int,
+        *,
+        threshold_mm_hr: float = DEFAULT_POP_THRESHOLD_MM_HR,
+    ) -> float | None:
+        stats = self.stats_at_lead(lead_minutes, threshold_mm_hr=threshold_mm_hr)
+        return None if stats is None else stats.probability
 
-        member_slice = self._data_var[tuple(index)]
-        if np.ma.isMaskedArray(member_slice):
-            members = np.ma.filled(member_slice, np.nan).astype(np.float32)
-        else:
-            members = np.asarray(member_slice, dtype=np.float32)
-        if members.ndim != 1:
-            raise ValueError(f"Expected 1-D member slice, got shape {members.shape}")
-
-        valid = np.isfinite(members)
-        if not np.any(valid):
-            return None
-
-        return float(np.nanmean(members))
+    def expected_at_lead(self, lead_minutes: int) -> float | None:
+        stats = self.stats_at_lead(lead_minutes)
+        return None if stats is None else stats.expected
 
 
 def _radar_indices(grid: KnmiGridInfo, lng: float, lat: float) -> tuple[int, int] | None:

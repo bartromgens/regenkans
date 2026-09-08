@@ -38,6 +38,8 @@ export interface PointSeriesPoint {
   intensity: number | null;
   probability: number | null;
   expected: number | null;
+  p25: number | null;
+  p75: number | null;
 }
 
 export interface PointSeriesResponse {

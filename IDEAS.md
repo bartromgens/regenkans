@@ -16,7 +16,10 @@ Backlog of feature ideas and improvements. Check off items when implemented.
 - [ ] Advanced 'history' page that allows users to select any date available in our database, and shows the full 24 hour in a slider
 - [x] Add a play button that animates the map timeline
 - [ ] Show individual ensemble member forecasts (spaghetti plot / step-through) at a clicked point, instead of only the aggregated probability — the per-member data is already read from the NetCDF file, just currently discarded after being collapsed into the % probability
-- [ ] Show ensemble min and max (in addition to the aggregate) — on the chart as a band/range (off by default) and as a map overlay, so users can see the spread between the driest and wettest members
+- [ ] Show ensemble spread beyond the aggregate forecast
+  - [x] Chart: P25-P75 shaded band with header toggle (on by default)
+  - [ ] Map: min and max overlay layers alongside the current probability/intensity view
+  - [ ] Alternative: interval (e.g. P10-P90) instead of raw min/max if the full range is too noisy
 
 ## Mobile
 

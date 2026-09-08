@@ -63,6 +63,9 @@ const INTENSITY_BANDS: readonly IntensityBand[] = [
 
 const BAND_BORDER_COLOR = 'rgba(100, 116, 139, 0.35)';
 const BAND_LABEL_MIN_HEIGHT_PX = 15;
+const SPREAD_P25_LABEL = '__spread_p25';
+const SPREAD_BAND_LABEL = 'Spreiding (P25-P75)';
+const SPREAD_FILL_COLOR = 'rgba(5, 150, 105, 0.18)';
 
 @Component({
   selector: 'app-rain-chart',
@@ -89,6 +92,8 @@ export class RainChart implements OnDestroy {
   readonly closed = output<void>();
   readonly windowChange = output<boolean>();
 
+  readonly showSpread = signal(true);
+
   private chart: Chart | null = null;
 
   constructor() {
@@ -102,6 +107,7 @@ export class RainChart implements OnDestroy {
       this.error();
       this.clockMs();
       this.extendedWindow();
+      this.showSpread();
       this.renderChart();
     });
 
@@ -150,6 +156,10 @@ export class RainChart implements OnDestroy {
     this.windowChange.emit(extended);
   }
 
+  toggleSpread(): void {
+    this.showSpread.update((value) => !value);
+  }
+
   private renderChart(): void {
     const points = this.series();
     const canvas = this.chartCanvas()?.nativeElement;
@@ -178,6 +188,7 @@ export class RainChart implements OnDestroy {
     const probabilityData = toChartPoints(windowed, (point) =>
       point.probability === null ? null : point.probability * 100,
     );
+    const spreadDatasets = buildSpreadDatasets(windowed, this.showSpread());
 
     const selectedMs = this.resolveSelectedMs(this.selectedValidAt(), minMs, maxMs);
 
@@ -185,6 +196,7 @@ export class RainChart implements OnDestroy {
       type: 'line',
       data: {
         datasets: [
+          ...spreadDatasets,
           {
             label: 'Intensiteit (mm/u)',
             data: intensityData,
@@ -195,6 +207,7 @@ export class RainChart implements OnDestroy {
             pointRadius: 0,
             pointHitRadius: 8,
             spanGaps: false,
+            order: 0,
           },
           {
             label: 'Verwacht (mm/u)',
@@ -207,6 +220,7 @@ export class RainChart implements OnDestroy {
             pointHitRadius: 8,
             spanGaps: true,
             borderDash: [5, 3],
+            order: 0,
           },
           {
             label: 'Kans (%)',
@@ -218,6 +232,7 @@ export class RainChart implements OnDestroy {
             pointRadius: 0,
             pointHitRadius: 8,
             spanGaps: true,
+            order: 0,
           },
         ],
       },
@@ -242,9 +257,11 @@ export class RainChart implements OnDestroy {
               boxWidth: 12,
               boxHeight: 2,
               usePointStyle: false,
+              filter: (item) => item.text !== SPREAD_P25_LABEL,
             },
           },
           tooltip: {
+            filter: (item) => item.dataset.label !== SPREAD_P25_LABEL,
             callbacks: {
               title: (items) => {
                 const timeMs = items[0]?.parsed.x;
@@ -263,6 +280,19 @@ export class RainChart implements OnDestroy {
                 const value = context.parsed.y;
                 if (value === null || Number.isNaN(value)) {
                   return `${context.dataset.label}: —`;
+                }
+                if (context.dataset.label === SPREAD_BAND_LABEL) {
+                  const p25Dataset = context.chart.data.datasets.find(
+                    (dataset) => dataset.label === SPREAD_P25_LABEL,
+                  );
+                  const p25Point = p25Dataset?.data[context.dataIndex] as
+                    | { y: number | null }
+                    | undefined;
+                  const p25 = p25Point?.y;
+                  if (p25 === null || p25 === undefined || Number.isNaN(p25)) {
+                    return `${SPREAD_BAND_LABEL}: —`;
+                  }
+                  return `${SPREAD_BAND_LABEL}: ${p25.toFixed(2)} - ${value.toFixed(2)} mm/u`;
                 }
                 if (context.dataset.yAxisID === 'y1') {
                   return `${context.dataset.label}: ${value.toFixed(0)}%`;
@@ -358,6 +388,45 @@ function toChartPoints(
     x: new Date(point.valid_at).getTime(),
     y: valueOf(point),
   }));
+}
+
+function buildSpreadDatasets(
+  points: PointSeriesPoint[],
+  showSpread: boolean,
+) {
+  if (!showSpread) {
+    return [];
+  }
+
+  const p25Data = toChartPoints(points, (point) => point.p25);
+  const p75Data = toChartPoints(points, (point) => point.p75);
+
+  return [
+    {
+      label: SPREAD_P25_LABEL,
+      data: p25Data,
+      borderWidth: 0,
+      pointRadius: 0,
+      pointHitRadius: 0,
+      yAxisID: 'y',
+      tension: 0.25,
+      spanGaps: true,
+      order: 1,
+    },
+    {
+      label: SPREAD_BAND_LABEL,
+      data: p75Data,
+      borderWidth: 0,
+      pointRadius: 0,
+      pointHitRadius: 8,
+      backgroundColor: SPREAD_FILL_COLOR,
+      fill: '-1',
+      yAxisID: 'y',
+      tension: 0.25,
+      spanGaps: true,
+      order: 1,
+    },
+  ];
 }
 
 function formatChartTime(

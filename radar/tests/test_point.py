@@ -294,3 +294,28 @@ class EnsemblePointSamplerScaleTests(SimpleTestCase):
             sampler.expected_at_lead(5),
             sampler.probability_at_lead(5),
         )
+
+    def test_live_format_stats_at_lead_returns_percentiles(self):
+        path = create_live_ensemble_forecast_nc(
+            Path(self.tempdir.name) / "KNMI_PYSTEPS_BLEND_ENS_202608301805.nc",
+            step_count=3,
+            member_count=20,
+            wet_member_count=10,
+            issued_at=datetime(2026, 8, 30, 18, 5, tzinfo=timezone.utc),
+        )
+        _, grid = read_expected_precipitation(path, lead_minutes=5)
+        lat = grid.y_coords_km[self.WET_ROW]
+        lng = grid.x_coords_km[self.WET_COL]
+
+        sampler = _EnsemblePointSampler(path, lng, lat)
+        self.addCleanup(sampler.close)
+
+        stats = sampler.stats_at_lead(5)
+        self.assertIsNotNone(stats)
+        assert stats is not None
+        self.assertAlmostEqual(stats.probability, 0.5)
+        self.assertAlmostEqual(stats.expected, 0.1)
+        self.assertAlmostEqual(stats.p25, 0.0)
+        self.assertAlmostEqual(stats.p75, 0.2)
+        self.assertAlmostEqual(sampler.probability_at_lead(5), stats.probability)
+        self.assertAlmostEqual(sampler.expected_at_lead(5), stats.expected)
