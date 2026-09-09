@@ -14,6 +14,8 @@ from radar.render import frame_cache_path, read_cached_bbox
 
 FrameKind = Literal["observed", "forecast"]
 
+ENSEMBLE_STALENESS_THRESHOLD = timedelta(minutes=15)
+
 
 @dataclass(frozen=True)
 class FrameSource:
@@ -53,6 +55,13 @@ def build_unified_timeline(
         return None, [], False
 
     now = latest_radar.issued_at
+
+    if (
+        latest_ensemble is not None
+        and now - latest_ensemble.issued_at > ENSEMBLE_STALENESS_THRESHOLD
+    ):
+        latest_ensemble = None
+
     cutoff = now - timedelta(hours=hours)
     future_cutoff = now + timedelta(hours=future_hours) if future_hours is not None else None
     past_forecasts = (
