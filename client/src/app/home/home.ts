@@ -31,6 +31,7 @@ import {
   RainChart,
 } from './rain-chart/rain-chart';
 import { framesForSliderMode } from './slider-frames';
+import { TrackingService } from '../tracking.service';
 
 const SCRUB_THROTTLE_MS = 150;
 const PLAY_INTERVAL_MS = 700;
@@ -50,9 +51,11 @@ export class Home implements OnInit {
   private readonly radarService = inject(RadarService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly breakpointObserver = inject(BreakpointObserver);
+  private readonly tracking = inject(TrackingService);
   private readonly radarMap = viewChild(RadarMap);
   private readonly rainChart = viewChild(RainChart);
   private wasMobile = false;
+  private wasShowingChart = false;
   private timelineReady = false;
   private mobileAutoplayStarted = false;
   private frameLoadToken = 0;
@@ -109,6 +112,14 @@ export class Home implements OnInit {
       if (mobile) {
         untracked(() => this.maybeStartMobileAutoplay());
       }
+    });
+
+    effect(() => {
+      const showingChart = this.showRainChart();
+      if (showingChart && !this.wasShowingChart) {
+        this.tracking.trackEvent('Chart Interaction', 'View');
+      }
+      this.wasShowingChart = showingChart;
     });
   }
 
@@ -231,6 +242,7 @@ export class Home implements OnInit {
       this.currentLabel.set(this.formatValidAt(slot.valid_at));
     }
 
+    this.tracking.trackEvent('Timeline Interaction', 'Scrub');
     this.lastFrameLoadAt = Date.now();
     void this.showFrame(index);
   }
@@ -259,6 +271,8 @@ export class Home implements OnInit {
     if (nextMode === 'expected' && !this.ensembleAvailable()) {
       return;
     }
+
+    this.tracking.trackEvent('Map Interaction', 'Mode Change', nextMode);
 
     const currentValidAt = this.sliderFrames()[this.selectedIndex()]?.valid_at ?? null;
     this.mode.set(nextMode);

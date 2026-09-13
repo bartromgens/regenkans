@@ -5,10 +5,12 @@ import {
   OnInit,
   ViewChild,
   effect,
+  inject,
   input,
   output,
 } from '@angular/core';
 import * as maplibregl from 'maplibre-gl';
+import { TrackingService } from '../../tracking.service';
 
 const OVERLAY_SOURCE_ID = 'radar-overlay';
 const OVERLAY_LAYER_ID = 'radar-overlay-layer';
@@ -33,6 +35,8 @@ export interface MapLocation {
   templateUrl: './radar-map.html',
 })
 export class RadarMap implements OnInit, OnDestroy {
+  private readonly tracking = inject(TrackingService);
+
   @ViewChild('mapContainer', { static: true })
   mapContainer!: ElementRef<HTMLDivElement>;
 
@@ -102,10 +106,19 @@ export class RadarMap implements OnInit, OnDestroy {
     });
 
     this.map.on('click', (event) => {
+      this.tracking.trackEvent('Map Interaction', 'Click');
       this.locationClick.emit({
         lng: event.lngLat.lng,
         lat: event.lngLat.lat,
       });
+    });
+
+    this.map.on('dragend', () => {
+      this.tracking.trackEvent('Map Interaction', 'Drag');
+    });
+
+    this.map.on('zoomend', () => {
+      this.tracking.trackEvent('Map Interaction', 'Zoom');
     });
 
     this.map.once('load', () => {
