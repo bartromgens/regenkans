@@ -43,7 +43,9 @@ def _resolve_ensemble_step(filename: str, lead_minutes: int) -> EnsembleForecast
 def _frame_png_response(rendered) -> FileResponse:
     west, south, east, north = rendered.bbox
     response = FileResponse(rendered.path.open("rb"), content_type="image/png")
-    response["Cache-Control"] = "public, max-age=300"
+    # Frame content is immutable: the cache key is filename + lead_minutes
+    # and the file is rendered once, so revisits never need to refetch.
+    response["Cache-Control"] = "public, max-age=31536000, immutable"
     response["X-Radar-BBox"] = f"{west},{south},{east},{north}"
     response["Access-Control-Expose-Headers"] = "X-Radar-BBox"
     response["Last-Modified"] = http_date(rendered.path.stat().st_mtime)
