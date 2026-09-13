@@ -7,9 +7,17 @@ The backend downloads weather data from KNMI (the Dutch weather institute), proc
 ## How it works
 
 1. **Download** — Django management commands fetch the latest files from the KNMI Open Data API.
-2. **Process** — Radar files (HDF5) and ensemble forecast files (NetCDF) are parsed. Metadata is stored in the database. Map images are rendered on demand as PNG overlays.
+2. **Process** — Radar files (HDF5) and ensemble forecast files (NetCDF) are parsed. Metadata is stored in the database. Every map image the slider can show is rendered to a PNG overlay right away, so no visitor request has to wait for one.
 3. **Serve** — The API combines past radar observations, a short-term rain forecast (nowcast), and rain probability into one timeline.
-4. **Show** — The Angular app loads the timeline and draws frames on a MapLibre map. Use the slider to move through time, and switch between **intensity** (how hard it rains) and **probability** (how likely rain is).
+4. **Show** — The Angular app loads the timeline and draws frames on a MapLibre map. Use the slider to move through time, and switch between **intensity** (how hard it rains) and **probability** (how likely rain is). Once the first frame is up, the app quietly warms the rest of the window in the background so dragging the slider is instant.
+
+### Frame performance
+
+Frames are PNG overlays, roughly 40 KB each, and a slider window holds about 96 of them. Three things keep scrubbing fast:
+
+- **Rendered at ingest.** `ingest_radar_forecast` and `ingest_ensemble_forecast` render every frame within `FRAME_PRERENDER_HOURS` (4, matching the client's `TIMELINE_WINDOW_HOURS`) as their last step. Rendering costs about 0.3s of CPU per frame; doing it in cron rather than in a request keeps that off the three gunicorn workers, which would otherwise all be busy for the first visitor after each five-minute ingest. Pass `--no-prerender` to skip it and fall back to rendering on demand.
+- **Served by nginx.** Frames are immutable files on disk, so `nginx/regenkans.conf` serves them directly instead of proxying to Django. A frame that is not on disk falls back to the API, which renders it on demand.
+- **Warmed by the client.** After the first frame is drawn, the app prefetches the rest of the slider window on idle time, expanding outward from the selected frame, at most four requests at a time. It skips this entirely when the browser reports a metered or slow connection.
 
 ## Data
 
@@ -115,7 +123,7 @@ docker compose -f docker-compose.prod.yml exec api python manage.py migrate
 docker compose -f docker-compose.prod.yml exec api python manage.py createsuperuser
 ```
 
-4. Configure VPS nginx and TLS using `nginx/regenkans.conf` (see comments at the top of that file for certbot setup).
+4. Configure VPS nginx and TLS using `nginx/regenkans.conf` (see comments at the top of that file for certbot setup). `scripts/setup-nginx.sh` also points the frame paths at this checkout and grants nginx read access to `data/`. If it warns that nginx cannot traverse a parent directory, frames keep working — they are just served by the API instead of straight from disk.
 
 5. Install cron jobs for data ingestion:
 
@@ -129,7 +137,7 @@ crontab -e
 0 3 * * * /home/bart/regenkans/scripts/cleanup_ensemble.sh >> /home/bart/regenkans/log/ensemble_cleanup.log 2>&1
 ```
 
-The cleanup job deletes ensemble forecast records and NetCDF files older than 1 day (only the latest ensemble forecast is ever served, so older ones are pure disk usage). It always keeps the most recently issued forecast, even if ingestion has stalled.
+The cleanup job deletes radar and ensemble forecast records, their downloaded source files and their rendered frames older than 1 day (only the latest ensemble forecast is ever served, and the map only reaches four hours back, so older ones are pure disk usage). It always keeps the most recently issued forecast of each kind, even if ingestion has stalled. The frames are the bulk of what it reclaims: ingestion renders every frame the slider can show, which is around a gigabyte a day.
 
 Log output goes to the project's own `log/` directory (already writable by the deploy user), not `/var/log`.
 

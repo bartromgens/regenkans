@@ -56,12 +56,117 @@ describe('RadarService', () => {
   });
 
   it('prefetchFrame deduplicates requests for the same image_url', () => {
-    fetchMock.mockResolvedValue({ ok: true });
+    fetchMock.mockResolvedValue(okResponse());
 
     service.prefetchFrame(source.image_url);
     service.prefetchFrame(source.image_url);
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(source.image_url);
+    expect(fetchMock).toHaveBeenCalledWith(source.image_url, { priority: 'low' });
+  });
+
+  it('prefetchFrame reads the body so the transfer is not cancelled', async () => {
+    const response = okResponse();
+    fetchMock.mockResolvedValue(response);
+
+    service.prefetchFrame(source.image_url);
+    await vi.waitFor(() => expect(response.blob).toHaveBeenCalledTimes(1));
+  });
+
+  it('warmFrames keeps at most four requests in flight', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    fetchMock.mockImplementation(
+      () => new Promise((resolve) => pending.push(resolve)),
+    );
+
+    service.warmFrames(frameUrls(10));
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+
+    pending[0](okResponse());
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(5));
+  });
+
+  it('warmFrames queues behind nothing when prefetchFrame jumps the queue', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    fetchMock.mockImplementation(
+      () => new Promise((resolve) => pending.push(resolve)),
+    );
+
+    service.warmFrames(frameUrls(10));
+    service.prefetchFrame('/api/radar/frames/urgent.h5/0.png');
+
+    pending[0](okResponse());
+    await vi.waitFor(() =>
+      expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/radar/frames/urgent.h5/0.png', {
+        priority: 'low',
+      }),
+    );
+  });
+
+  it('warmFrames does nothing when the browser asks to save data', () => {
+    vi.stubGlobal('navigator', { connection: { saveData: true } });
+    fetchMock.mockResolvedValue(okResponse());
+
+    service.warmFrames(frameUrls(10));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('warmFrames does nothing on a slow connection', () => {
+    vi.stubGlobal('navigator', { connection: { effectiveType: '2g' } });
+    fetchMock.mockResolvedValue(okResponse());
+
+    service.warmFrames(frameUrls(10));
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('cancelQueuedPrefetches drops frames that have not started', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    fetchMock.mockImplementation(
+      () => new Promise((resolve) => pending.push(resolve)),
+    );
+
+    service.warmFrames(frameUrls(10));
+    service.cancelQueuedPrefetches();
+
+    pending[0](okResponse());
+    pending[1](okResponse());
+
+    // Only the four already in flight ever reach the network.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+  });
+
+  it('cancelQueuedPrefetches lets a dropped frame be requested again', async () => {
+    const pending: Array<(value: unknown) => void> = [];
+    fetchMock.mockImplementation(
+      () => new Promise((resolve) => pending.push(resolve)),
+    );
+
+    const dropped = frameUrls(6)[5];
+    service.warmFrames(frameUrls(6));
+    service.cancelQueuedPrefetches();
+    service.prefetchFrame(dropped);
+
+    // It still waits for a slot: the concurrency cap applies to urgent frames
+    // too, and the frame on screen is loaded by the map, not by this queue.
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+
+    pending[0](okResponse());
+    await vi.waitFor(() =>
+      expect(fetchMock).toHaveBeenNthCalledWith(5, dropped, { priority: 'low' }),
+    );
   });
 });
+
+function okResponse() {
+  return { ok: true, blob: vi.fn().mockResolvedValue(new Blob()) };
+}
+
+function frameUrls(count: number): string[] {
+  return Array.from(
+    { length: count },
+    (_value, index) => `/api/radar/frames/RAD.h5/${index}.png`,
+  );
+}

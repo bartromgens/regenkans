@@ -54,8 +54,29 @@ export const TIMELINE_WINDOW_HOURS = 4;
 /** Radar nowcast forecast window on the intensity slider. */
 export const NOWCAST_FORECAST_HOURS = 2;
 
+/**
+ * How many frame prefetches may be in flight at once.
+ *
+ * Frames are warmed a whole slider window at a time, so they need a ceiling:
+ * without one they would saturate the connection and delay the basemap tiles
+ * and the frame the user is actually looking at.
+ */
+const MAX_CONCURRENT_PREFETCHES = 4;
+
+const SLOW_CONNECTION_TYPES = new Set(['slow-2g', '2g', '3g']);
+
 interface BboxResponse {
   bbox: [number, number, number, number];
+}
+
+/** `priority` is not in the DOM typings yet, but browsers honour it. */
+interface PrefetchRequestInit extends RequestInit {
+  priority?: 'high' | 'low' | 'auto';
+}
+
+interface NetworkInformation {
+  saveData?: boolean;
+  effectiveType?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -66,7 +87,10 @@ export class RadarService {
     string,
     Promise<[number, number, number, number]>
   >();
+  /** Image URLs already requested, whether queued, in flight or cached. */
   private readonly prefetchedImageUrls = new Set<string>();
+  private readonly prefetchQueue: string[] = [];
+  private inFlightPrefetches = 0;
 
   getTimeline(hours = 24): Observable<RadarTimelineResponse> {
     return this.http.get<RadarTimelineResponse>('/api/radar/timeline/', {
@@ -126,12 +150,102 @@ export class RadarService {
     return request;
   }
 
+  /**
+   * Warm a single frame ahead of anything already queued.
+   *
+   * Used for the frames next to the slider handle: whatever the background
+   * warm-up is working through, those are the ones the user reaches next.
+   */
   prefetchFrame(imageUrl: string): void {
+    this.enqueuePrefetch(imageUrl, 'front');
+  }
+
+  /**
+   * Warm a run of frames in the background, in the order given.
+   *
+   * Skipped on metered or slow connections: near-neighbour prefetching keeps
+   * scrubbing usable there, and several MB of frames the visitor may never
+   * look at is a poor trade on mobile data.
+   */
+  warmFrames(imageUrls: string[]): void {
+    if (!this.bulkPrefetchAllowed()) {
+      return;
+    }
+
+    for (const imageUrl of imageUrls) {
+      this.enqueuePrefetch(imageUrl, 'back');
+    }
+  }
+
+  /**
+   * Drop frames that have not started loading yet.
+   *
+   * Called when the mode changes: the queued frames belong to the mode the
+   * user just left, so finishing them would only delay the new one.
+   */
+  cancelQueuedPrefetches(): void {
+    for (const imageUrl of this.prefetchQueue) {
+      this.prefetchedImageUrls.delete(imageUrl);
+    }
+    this.prefetchQueue.length = 0;
+  }
+
+  private enqueuePrefetch(imageUrl: string, position: 'front' | 'back'): void {
     if (this.prefetchedImageUrls.has(imageUrl)) {
       return;
     }
+
     this.prefetchedImageUrls.add(imageUrl);
-    void fetch(imageUrl).catch(() => this.prefetchedImageUrls.delete(imageUrl));
+    if (position === 'front') {
+      this.prefetchQueue.unshift(imageUrl);
+    } else {
+      this.prefetchQueue.push(imageUrl);
+    }
+    this.drainPrefetchQueue();
+  }
+
+  private drainPrefetchQueue(): void {
+    while (
+      this.inFlightPrefetches < MAX_CONCURRENT_PREFETCHES &&
+      this.prefetchQueue.length > 0
+    ) {
+      const imageUrl = this.prefetchQueue.shift() as string;
+      this.inFlightPrefetches += 1;
+      void this.fetchIntoCache(imageUrl).finally(() => {
+        this.inFlightPrefetches -= 1;
+        this.drainPrefetchQueue();
+      });
+    }
+  }
+
+  private async fetchIntoCache(imageUrl: string): Promise<void> {
+    const init: PrefetchRequestInit = { priority: 'low' };
+
+    try {
+      const response = await fetch(imageUrl, init);
+      // The body has to be read to completion. A response whose body is never
+      // consumed can have its transfer cancelled once it is garbage collected,
+      // which would leave nothing in the HTTP cache for the map to reuse.
+      await response.blob();
+      if (!response.ok) {
+        this.prefetchedImageUrls.delete(imageUrl);
+      }
+    } catch {
+      this.prefetchedImageUrls.delete(imageUrl);
+    }
+  }
+
+  private bulkPrefetchAllowed(): boolean {
+    const connection = (
+      navigator as Navigator & { connection?: NetworkInformation }
+    ).connection;
+    if (!connection) {
+      return true;
+    }
+    if (connection.saveData) {
+      return false;
+    }
+    return !SLOW_CONNECTION_TYPES.has(connection.effectiveType ?? '');
   }
 
   private async fetchBbox(

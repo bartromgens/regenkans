@@ -6,16 +6,16 @@ from pathlib import Path
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from radar.frames import delete_frame_files, ensemble_frame_files
-from radar.models import EnsembleForecast
+from radar.frames import delete_frame_files, radar_frame_files
+from radar.models import RadarForecast
 
 
 class Command(BaseCommand):
     help = (
-        "Delete ensemble forecast records, their downloaded NetCDF files and "
-        "their rendered frames older than --days. The most recently issued "
-        "forecast is always kept, even if it is older than the cutoff, so the "
-        "probability view never ends up with zero data if ingestion has stalled."
+        "Delete radar forecast records, their downloaded HDF5 files and their "
+        "rendered frames older than --days. The most recently issued forecast "
+        "is always kept, even if it is older than the cutoff, so the map never "
+        "ends up with zero data if ingestion has stalled."
     )
 
     def add_arguments(self, parser):
@@ -36,15 +36,15 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         cutoff = timezone.now() - timedelta(days=days)
 
-        latest = EnsembleForecast.objects.order_by("-issued_at").first()
+        latest = RadarForecast.objects.order_by("-issued_at").first()
 
-        queryset = EnsembleForecast.objects.filter(issued_at__lt=cutoff)
+        queryset = RadarForecast.objects.filter(issued_at__lt=cutoff)
         if latest is not None:
             queryset = queryset.exclude(pk=latest.pk)
 
         forecasts = list(queryset)
         if not forecasts:
-            self.stdout.write("No ensemble forecasts older than cutoff to clean up.")
+            self.stdout.write("No radar forecasts older than cutoff to clean up.")
             return
 
         total_bytes = 0
@@ -58,10 +58,7 @@ class Command(BaseCommand):
             else:
                 missing_files += 1
 
-            # Rendered frames far outnumber the NetCDF files: ingestion renders
-            # every frame the slider can show, so without this they would pile
-            # up unbounded long after the forecast itself is gone.
-            frames = ensemble_frame_files(forecast.filename)
+            frames = radar_frame_files(forecast.filename)
             frames_by_forecast[forecast.pk] = frames
             frame_count += len(frames)
             total_bytes += sum(frame.stat().st_size for frame in frames)
@@ -69,7 +66,7 @@ class Command(BaseCommand):
         freed_mb = total_bytes / (1024 * 1024)
         action = "Would delete" if dry_run else "Deleting"
         self.stdout.write(
-            f"{action} {len(forecasts)} ensemble forecast(s) issued before "
+            f"{action} {len(forecasts)} radar forecast(s) issued before "
             f"{cutoff.isoformat()} and {frame_count} rendered frame(s) "
             f"(~{freed_mb:.1f} MB on disk, "
             f"{missing_files} file(s) already missing)."
@@ -92,13 +89,13 @@ class Command(BaseCommand):
             for error in errors:
                 self.stderr.write(self.style.WARNING(f"Could not delete {error}"))
 
-        deleted_count, _ = EnsembleForecast.objects.filter(
+        RadarForecast.objects.filter(
             pk__in=[forecast.pk for forecast in forecasts]
         ).delete()
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Deleted {len(forecasts)} ensemble forecast record(s) "
+                f"Deleted {len(forecasts)} radar forecast record(s) "
                 f"and {frame_count} rendered frame(s)."
             )
         )

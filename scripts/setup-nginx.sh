@@ -13,6 +13,9 @@ set -euo pipefail
 DOMAIN="regenkans.nl"
 WWW_DOMAIN="www.regenkans.nl"
 WEBROOT="/var/www/html"
+NGINX_USER="www-data"
+# Path baked into nginx/regenkans.conf, rewritten to this checkout on install.
+CONF_REPO_ROOT="/home/bart/regenkans"
 CERT_PATH="/etc/letsencrypt/live/${DOMAIN}/fullchain.pem"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -131,9 +134,48 @@ install_full_nginx() {
     exit 1
   fi
 
-  cp "${NGINX_CONF}" "${NGINX_SITE}"
+  sed "s|${CONF_REPO_ROOT}/data/|${REPO_ROOT}/data/|g" "${NGINX_CONF}" >"${NGINX_SITE}"
   nginx -t
   systemctl reload nginx
+}
+
+ensure_frame_read_access() {
+  echo "==> Granting ${NGINX_USER} read access to rendered frames..."
+
+  local dir
+  for dir in "${REPO_ROOT}" "${REPO_ROOT}/data" \
+    "${REPO_ROOT}/data/radar_forecast" "${REPO_ROOT}/data/ensemble_forecast"; do
+    if [[ -d "${dir}" ]]; then
+      chmod o+x "${dir}"
+    fi
+  done
+
+  for dir in "${REPO_ROOT}/data/radar_forecast/frames" \
+    "${REPO_ROOT}/data/ensemble_forecast/frames"; do
+    mkdir -p "${dir}"
+    chmod o+rx "${dir}"
+    find "${dir}" -type f -exec chmod o+r {} +
+  done
+
+  # Ancestors outside the repo (a home directory, typically) are left alone:
+  # widening those is the operator's call, not this script's. Without traversal
+  # nginx gets a 403, which the frame locations route back to the API, so the
+  # site still works -- it only loses the offload.
+  local ancestor="${REPO_ROOT}"
+  local ancestors=()
+  while [[ "${ancestor}" != "/" ]]; do
+    ancestors=("${ancestor}" "${ancestors[@]}")
+    ancestor="$(dirname "${ancestor}")"
+  done
+
+  for ancestor in "${ancestors[@]}"; do
+    if ! sudo -u "${NGINX_USER}" test -x "${ancestor}"; then
+      echo "Warning: ${NGINX_USER} cannot traverse ${ancestor}, so frames will be" >&2
+      echo "         served by the API instead of straight from disk." >&2
+      echo "         To enable the offload: sudo chmod o+x ${ancestor}" >&2
+      break
+    fi
+  done
 }
 
 configure_firewall() {
@@ -159,6 +201,7 @@ main() {
   obtain_certificate
   ensure_ssl_snippets
   install_full_nginx
+  ensure_frame_read_access
   configure_firewall
   verify
 }

@@ -38,6 +38,10 @@ const PLAY_INTERVAL_MS = 700;
 const HOUR_MS = 60 * 60 * 1000;
 const MOBILE_BREAKPOINT = '(max-width: 640px)';
 const GEOLOCATION_TIMEOUT_MS = 10_000;
+/** Latest the warm-up may start once the browser reports itself idle. */
+const WARM_UP_IDLE_TIMEOUT_MS = 2_000;
+/** Warm-up delay where `requestIdleCallback` is missing, as on Safari. */
+const WARM_UP_FALLBACK_DELAY_MS = 1_000;
 
 export type MobileTab = 'map' | 'chart';
 
@@ -278,10 +282,13 @@ export class Home implements OnInit {
     this.mode.set(nextMode);
     this.sharedBbox = null;
     this.sharedBboxImageUrl = null;
+    // Whatever is still queued belongs to the mode being left behind.
+    this.radarService.cancelQueuedPrefetches();
 
     const nextFrames = this.sliderFrames();
     this.nowIndex.set(this.resolveNowIndex(nextFrames));
     await this.selectFrame(indexForValidAt(nextFrames, currentValidAt));
+    this.scheduleWindowWarmUp();
   }
 
   togglePlay(): void {
@@ -377,6 +384,7 @@ export class Home implements OnInit {
       this.nowIndex.set(nowIndex);
       this.startNowIndexRefresh();
       await this.selectFrame(nowIndex);
+      this.scheduleWindowWarmUp();
       this.timelineReady = true;
       this.maybeStartMobileAutoplay();
     } catch {
@@ -553,6 +561,37 @@ export class Home implements OnInit {
         this.radarService.prefetchFrame(source.image_url);
       }
     }
+  }
+
+  /**
+   * Warm every frame of the slider window once the map has something to show.
+   *
+   * Dragging the slider then hits the browser cache instead of the network.
+   * It waits for idle time so it never competes with the first frame or the
+   * basemap tiles, and the service caps how many run at once.
+   */
+  private scheduleWindowWarmUp(): void {
+    runWhenIdle(() => this.warmSliderWindow());
+  }
+
+  private warmSliderWindow(): void {
+    const timelineFrames = this.sliderFrames();
+    const index = this.selectedIndex();
+    const imageUrls: string[] = [];
+
+    // Expand outward from the selected frame so the frames the user is most
+    // likely to reach next are the first ones to arrive.
+    for (let offset = 1; offset < timelineFrames.length; offset++) {
+      for (const neighborIndex of [index + offset, index - offset]) {
+        const neighbor = timelineFrames[neighborIndex];
+        const source = neighbor ? this.sourceForMode(neighbor) : null;
+        if (source) {
+          imageUrls.push(source.image_url);
+        }
+      }
+    }
+
+    this.radarService.warmFrames(imageUrls);
   }
 
   private formatValidAt(value: string): string {
@@ -741,6 +780,23 @@ export class Home implements OnInit {
     const index = this.selectedIndex();
     return frames[index]?.valid_at ?? null;
   });
+}
+
+type IdleWindow = Window & {
+  requestIdleCallback?: (
+    callback: () => void,
+    options?: { timeout: number },
+  ) => number;
+};
+
+function runWhenIdle(callback: () => void): void {
+  const idleWindow = window as IdleWindow;
+  if (idleWindow.requestIdleCallback) {
+    idleWindow.requestIdleCallback(callback, { timeout: WARM_UP_IDLE_TIMEOUT_MS });
+    return;
+  }
+
+  setTimeout(callback, WARM_UP_FALLBACK_DELAY_MS);
 }
 
 function indexForValidAt(frames: TimelineSlot[], validAt: string | null): number {

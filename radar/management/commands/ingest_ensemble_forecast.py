@@ -10,6 +10,7 @@ from django.utils.dateparse import parse_datetime
 from radar.knmi import KnmiApiError, KnmiOpenDataClient, parse_ensemble_filename_issued_at
 from radar.models import EnsembleForecast, EnsembleForecastStep, EnsembleIngestState
 from radar.netcdf import parse_ensemble_forecast_netcdf
+from radar.prerender import prerender_ensemble_forecast
 
 
 class Command(BaseCommand):
@@ -40,6 +41,11 @@ class Command(BaseCommand):
             "--force",
             action="store_true",
             help="Re-download and re-parse files even if already ingested.",
+        )
+        parser.add_argument(
+            "--no-prerender",
+            action="store_true",
+            help="Skip rendering the frames, leaving them to be rendered on demand.",
         )
 
     def handle(self, *args, **options):
@@ -99,6 +105,7 @@ class Command(BaseCommand):
                 data_dir=data_dir,
                 file_info=file_info,
                 force=options["force"],
+                prerender=not options["no_prerender"],
             )
             if result == "ingested":
                 ingested += 1
@@ -108,6 +115,12 @@ class Command(BaseCommand):
                 failed += 1
 
         return ingested, skipped, failed
+
+    def _prerender(self, forecast: EnsembleForecast) -> None:
+        result = prerender_ensemble_forecast(forecast)
+        self.stdout.write(f"Pre-rendered {result.rendered} frame(s)")
+        for error in result.errors:
+            self.stderr.write(self.style.WARNING(f"Could not pre-render {error}"))
 
     def _files_latest(self, client: KnmiOpenDataClient, limit: int | None):
         params = {"maxKeys": limit or 1, "orderBy": "created", "sorting": "desc"}
@@ -141,7 +154,9 @@ class Command(BaseCommand):
         }
         return list(client.iter_files(params, max_files=limit))
 
-    def _ingest_file(self, client, data_dir: Path, file_info, force: bool) -> str:
+    def _ingest_file(
+        self, client, data_dir: Path, file_info, force: bool, prerender: bool
+    ) -> str:
         existing = EnsembleForecast.objects.filter(filename=file_info.filename).first()
         destination = data_dir / file_info.filename
 
@@ -188,6 +203,9 @@ class Command(BaseCommand):
                         for step in metadata.steps
                     ]
                 )
+
+            if prerender:
+                self._prerender(forecast)
 
             self.stdout.write(self.style.SUCCESS(f"Ingested {file_info.filename}"))
             return "ingested"

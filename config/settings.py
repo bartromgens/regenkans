@@ -163,6 +163,11 @@ KNMI_ENSEMBLE_FORECAST_DATASET = "seamless_precipitation_ensemble_forecast_membe
 KNMI_ENSEMBLE_FORECAST_VERSION = "1.0"
 KNMI_ENSEMBLE_FORECAST_DATA_DIR = BASE_DIR / "data" / "ensemble_forecast"
 
+# How far ahead ingestion renders frames. Keep in sync with the client's
+# TIMELINE_WINDOW_HOURS (client/src/app/radar/radar.service.ts): frames with a
+# longer lead time never reach the slider, so rendering them is wasted work.
+FRAME_PRERENDER_HOURS = 4
+
 try:
     from .settings_local import *  # noqa: F401 F403
 except ImportError:
