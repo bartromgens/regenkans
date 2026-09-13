@@ -1,0 +1,15 @@
+<button
+  type="button"
+  class="refresh-button"
+  [class.refresh-button--busy]="refreshing()"
+  [disabled]="refreshing()"
+  [attr.aria-label]="refreshing() ? 'Gegevens worden ververst' : 'Ververs gegevens'"
+  [attr.title]="error()"
+  (click)="refresh.emit()"
+>
+  <span class="material-icons" aria-hidden="true">refresh</span>
+</button>
+
+@if (error()) {
+  <div class="refresh-error" role="status">{{ error() }}</div>
+}

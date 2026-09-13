@@ -1,0 +1,24 @@
+<nav class="mobile-tabs" role="tablist" aria-label="Kaart of grafiek">
+  <button
+    type="button"
+    class="mobile-tabs__button"
+    role="tab"
+    [class.mobile-tabs__button--active]="activeTab() === 'map'"
+    [attr.aria-selected]="activeTab() === 'map'"
+    (click)="tabChange.emit('map')"
+  >
+    Kaart
+  </button>
+  <button
+    type="button"
+    class="mobile-tabs__button"
+    role="tab"
+    [class.mobile-tabs__button--active]="activeTab() === 'chart'"
+    [class.mobile-tabs__button--attention]="chartNeedsAttention()"
+    [attr.aria-selected]="activeTab() === 'chart'"
+    [attr.aria-label]="chartNeedsAttention() ? 'Grafiek, locatie geselecteerd' : 'Grafiek'"
+    (click)="tabChange.emit('chart')"
+  >
+    Grafiek
+  </button>
+</nav>

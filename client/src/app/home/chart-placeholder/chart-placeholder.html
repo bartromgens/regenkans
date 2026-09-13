@@ -1,0 +1,10 @@
+<div class="chart-empty">
+  @if (loading()) {
+    <p class="chart-empty__text">Locatie ophalen…</p>
+  } @else if (error()) {
+    <p class="chart-empty__text">{{ error() }}</p>
+    <button type="button" class="chart-empty__button" (click)="backToMap.emit()">
+      Naar de kaart
+    </button>
+  }
+</div>

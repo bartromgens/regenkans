@@ -1,119 +1,85 @@
-<div class="map-layout" [class.map-layout--mobile]="isMobile()">
+<div class="map-layout" [class.map-layout--mobile]="layout.isMobile()">
   <h1 class="visually-hidden">Regenradar Nederland met kans op regen</h1>
-  @if (isMobile()) {
-    <nav class="mobile-tabs" role="tablist" aria-label="Kaart of grafiek">
-      <button
-        type="button"
-        class="mobile-tabs__button"
-        role="tab"
-        [class.mobile-tabs__button--active]="mobileTab() === 'map'"
-        [attr.aria-selected]="mobileTab() === 'map'"
-        (click)="onMobileTabChange('map')"
-      >
-        Kaart
-      </button>
-      <button
-        type="button"
-        class="mobile-tabs__button"
-        role="tab"
-        [class.mobile-tabs__button--active]="mobileTab() === 'chart'"
-        [class.mobile-tabs__button--attention]="chartTabNeedsAttention()"
-        [attr.aria-selected]="mobileTab() === 'chart'"
-        [attr.aria-label]="chartTabNeedsAttention() ? 'Grafiek, locatie geselecteerd' : 'Grafiek'"
-        (click)="onMobileTabChange('chart')"
-      >
-        Grafiek
-      </button>
-    </nav>
+  @if (layout.isMobile()) {
+    <app-mobile-tabs
+      [activeTab]="layout.mobileTab()"
+      [chartNeedsAttention]="layout.chartTabNeedsAttention()"
+      (tabChange)="onMobileTabChange($event)"
+    />
   }
 
   <div class="pane-stack">
-    <div class="map-pane" [class.map-pane--hidden]="isMobile() && mobileTab() === 'chart'">
+    <div class="map-pane" [class.map-pane--hidden]="!layout.mapVisible()">
       <div class="map-stage">
         <app-radar-map
           #radarMap
-          [overlay]="overlay()"
-          [markerLocation]="selectedLocation()"
+          [overlay]="timeline.overlay()"
+          [markerLocation]="pointSeries.location()"
           (locationClick)="onMapClick($event)"
-          (overlayApplied)="onOverlayApplied($event)"
-          (overlayFailed)="onOverlayFailed($event)"
+          (overlayApplied)="timeline.onOverlayApplied($event)"
+          (overlayFailed)="timeline.onOverlayFailed($event)"
         />
 
-        @if (!loading() && !timelineError()) {
+        @if (!timeline.loading() && !timeline.timelineError()) {
           <app-mode-toggle
-            [mode]="mode()"
-            [ensembleAvailable]="ensembleAvailable()"
-            [knmiEnsembleUnavailable]="knmiEnsembleUnavailable()"
-            (modeChange)="setMode($event)"
+            [mode]="timeline.mode()"
+            [ensembleAvailable]="timeline.ensembleAvailable()"
+            [knmiEnsembleUnavailable]="timeline.knmiEnsembleUnavailable()"
+            (modeChange)="timeline.setMode($event)"
           />
 
-          <app-map-legend [mode]="mode()" />
+          <app-map-legend [mode]="timeline.mode()" />
 
-          <button
-            type="button"
-            class="refresh-button"
-            [class.refresh-button--busy]="refreshing()"
-            [disabled]="refreshing()"
-            [attr.aria-label]="refreshing() ? 'Gegevens worden ververst' : 'Ververs gegevens'"
-            [attr.title]="refreshError()"
-            (click)="manualRefresh()"
-          >
-            <span class="material-icons" aria-hidden="true">refresh</span>
-          </button>
-
-          @if (refreshError()) {
-            <div class="refresh-error" role="status">{{ refreshError() }}</div>
-          }
+          <app-refresh-button
+            [refreshing]="timeline.refreshing()"
+            [error]="timeline.refreshError()"
+            (refresh)="timeline.manualRefresh()"
+          />
         }
       </div>
 
       <app-timeline-panel
-        [loading]="loading()"
-        [timelineError]="timelineError()"
-        [frameError]="frameError()"
-        [frames]="sliderFrames()"
-        [selectedIndex]="selectedIndex()"
-        [nowIndex]="nowIndex()"
-        [currentLabel]="currentLabel()"
-        [playing]="playing()"
-        (indexChange)="onSliderInput($event)"
-        (indexCommit)="onSliderCommit($event)"
-        (playToggle)="togglePlay()"
+        [loading]="timeline.loading()"
+        [timelineError]="timeline.timelineError()"
+        [frameError]="timeline.frameError()"
+        [frames]="timeline.sliderFrames()"
+        [selectedIndex]="timeline.selectedIndex()"
+        [nowIndex]="timeline.nowIndex()"
+        [currentLabel]="timeline.currentLabel()"
+        [playing]="timeline.playing()"
+        (indexChange)="timeline.onSliderInput($event)"
+        (indexCommit)="timeline.onSliderCommit($event)"
+        (playToggle)="timeline.togglePlay()"
       />
     </div>
 
     <div
       class="chart-pane"
-      [class.chart-pane--active]="isMobile() && mobileTab() === 'chart'"
-      [class.chart-pane--overlay]="!isMobile() && selectedLocation()"
+      [class.chart-pane--active]="!layout.mapVisible()"
+      [class.chart-pane--overlay]="!layout.isMobile() && pointSeries.location()"
     >
-      @if (isMobile() && mobileTab() === 'chart' && !selectedLocation()) {
-        <div class="chart-empty">
-          @if (geolocationLoading()) {
-            <p class="chart-empty__text">Locatie ophalen…</p>
-          } @else if (geolocationError()) {
-            <p class="chart-empty__text">{{ geolocationError() }}</p>
-            <button type="button" class="chart-empty__button" (click)="onMobileTabChange('map')">
-              Naar de kaart
-            </button>
-          }
-        </div>
+      @if (!layout.mapVisible() && !pointSeries.location()) {
+        <app-chart-placeholder
+          [loading]="geolocation.loading()"
+          [error]="geolocation.error()"
+          (backToMap)="onMobileTabChange('map')"
+        />
       }
 
       @if (showRainChart()) {
         <app-rain-chart
           #rainChart
-          [series]="pointSeries()"
-          [selectedValidAt]="selectedValidAt()"
-          [loading]="pointLoading()"
-          [extending]="pointExtending()"
-          [error]="pointError()"
-          [locationLabel]="locationLabel()"
-          [maxAvailableHours]="chartMaxAvailableHours()"
-          [extendedWindow]="chartExtendedWindow()"
-          [showCloseButton]="!isMobile()"
-          (closed)="onChartClosed()"
-          (windowChange)="onChartWindowChange($event)"
+          [series]="pointSeries.points()"
+          [selectedValidAt]="timeline.selectedValidAt()"
+          [loading]="pointSeries.loading()"
+          [extending]="pointSeries.extending()"
+          [error]="pointSeries.error()"
+          [locationLabel]="pointSeries.locationLabel()"
+          [maxAvailableHours]="pointSeries.maxAvailableHours()"
+          [extendedWindow]="pointSeries.extendedWindow()"
+          [showCloseButton]="!layout.isMobile()"
+          (closed)="pointSeries.clear()"
+          (windowChange)="pointSeries.setWindowExtended($event)"
         />
       }
     </div>
