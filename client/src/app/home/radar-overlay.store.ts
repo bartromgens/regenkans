@@ -3,7 +3,7 @@ import { OverlayMode, RadarService, TimelineSlot } from '../radar/radar.service'
 import { sourceForMode, unavailableMessage } from './frame-source';
 import { RadarOverlay } from './radar-map/radar-map';
 
-const SCRUB_THROTTLE_MS = 150;
+const SCRUB_THROTTLE_MS = 80;
 /** Latest the warm-up may start once the browser reports itself idle. */
 const WARM_UP_IDLE_TIMEOUT_MS = 2_000;
 /** Warm-up delay where `requestIdleCallback` is missing, as on Safari. */
