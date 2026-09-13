@@ -42,6 +42,12 @@ const GEOLOCATION_TIMEOUT_MS = 10_000;
 const WARM_UP_IDLE_TIMEOUT_MS = 2_000;
 /** Warm-up delay where `requestIdleCallback` is missing, as on Safari. */
 const WARM_UP_FALLBACK_DELAY_MS = 1_000;
+/** How often to check the backend for newer radar/forecast data. */
+const TIMELINE_POLL_INTERVAL_MS = 2 * 60 * 1000;
+/** How long a manual-refresh failure message stays visible. */
+const REFRESH_ERROR_DISPLAY_MS = 4_000;
+/** How long without timeline interaction before the view resumes following "now". */
+const IDLE_RESUME_MS = 3 * 60 * 1000;
 
 export type MobileTab = 'map' | 'chart';
 
@@ -61,11 +67,14 @@ export class Home implements OnInit {
   private wasMobile = false;
   private wasShowingChart = false;
   private timelineReady = false;
-  private mobileAutoplayStarted = false;
+  private autoplayStarted = false;
   private frameLoadToken = 0;
   private pointLoadToken = 0;
   private geolocationLoadToken = 0;
   private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
+  private pollIntervalId: ReturnType<typeof setInterval> | null = null;
+  private refreshErrorTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  private idleResumeTimerId: ReturnType<typeof setTimeout> | null = null;
   private playIntervalId: ReturnType<typeof setInterval> | null = null;
   private scrubTimerId: ReturnType<typeof setTimeout> | null = null;
   private pendingScrubIndex: number | null = null;
@@ -73,9 +82,22 @@ export class Home implements OnInit {
   private appliedImageUrl: string | null = null;
   private sharedBbox: [number, number, number, number] | null = null;
   private sharedBboxImageUrl: string | null = null;
+  private lastGeneratedAt: string | null = null;
+  private timelineRequestInFlight = false;
+  /**
+   * Whether the shown frame should keep tracking "now" as new data arrives.
+   *
+   * Turned off the moment the user scrubs or explicitly starts playback, so a
+   * background refresh never yanks their chosen point in time away from them.
+   * Mobile autoplay starting on its own does not count: it should keep
+   * following "now" so its endless loop stays live.
+   */
+  private followingNow = true;
 
   readonly loading = signal(true);
   readonly timelineError = signal<string | null>(null);
+  readonly refreshing = signal(false);
+  readonly refreshError = signal<string | null>(null);
   readonly frameError = signal<string | null>(null);
   readonly frames = signal<TimelineSlot[]>([]);
   readonly sliderFrames = computed(() => framesForSliderMode(this.frames(), this.mode()));
@@ -113,9 +135,7 @@ export class Home implements OnInit {
         requestAnimationFrame(() => this.schedulePaneResize());
       }
       this.wasMobile = mobile;
-      if (mobile) {
-        untracked(() => this.maybeStartMobileAutoplay());
-      }
+      untracked(() => this.maybeStartAutoplay());
     });
 
     effect(() => {
@@ -131,6 +151,12 @@ export class Home implements OnInit {
     this.destroyRef.onDestroy(() => {
       if (this.scrubTimerId !== null) {
         clearTimeout(this.scrubTimerId);
+      }
+      if (this.refreshErrorTimeoutId !== null) {
+        clearTimeout(this.refreshErrorTimeoutId);
+      }
+      if (this.idleResumeTimerId !== null) {
+        clearTimeout(this.idleResumeTimerId);
       }
       this.stopPlay();
     });
@@ -214,6 +240,8 @@ export class Home implements OnInit {
       return;
     }
 
+    this.followingNow = false;
+    this.scheduleIdleResume();
     this.stopPlay();
 
     const timelineFrames = this.sliderFrames();
@@ -233,6 +261,8 @@ export class Home implements OnInit {
       return;
     }
 
+    this.followingNow = false;
+    this.scheduleIdleResume();
     if (this.scrubTimerId !== null) {
       clearTimeout(this.scrubTimerId);
       this.scrubTimerId = null;
@@ -277,6 +307,9 @@ export class Home implements OnInit {
     }
 
     this.tracking.trackEvent('Map Interaction', 'Mode Change', nextMode);
+    if (!this.followingNow) {
+      this.scheduleIdleResume();
+    }
 
     const currentValidAt = this.sliderFrames()[this.selectedIndex()]?.valid_at ?? null;
     this.mode.set(nextMode);
@@ -292,6 +325,9 @@ export class Home implements OnInit {
   }
 
   togglePlay(): void {
+    this.followingNow = false;
+    this.scheduleIdleResume();
+
     if (this.playing()) {
       this.stopPlay();
       return;
@@ -300,16 +336,54 @@ export class Home implements OnInit {
     this.startPlay();
   }
 
-  private maybeStartMobileAutoplay(): void {
-    if (this.mobileAutoplayStarted || !this.isMobile() || !this.timelineReady) {
+  /**
+   * Start the animation once the timeline first loads, on both mobile and
+   * desktop, so the resting state of the page is always a live animation.
+   */
+  private maybeStartAutoplay(): void {
+    if (this.autoplayStarted || !this.timelineReady) {
       return;
     }
-    if (this.mobileTab() === 'chart' || this.sliderFrames().length <= 1) {
+    if ((this.isMobile() && this.mobileTab() === 'chart') || this.sliderFrames().length <= 1) {
       return;
     }
 
-    this.mobileAutoplayStarted = true;
+    this.autoplayStarted = true;
     this.startPlay();
+  }
+
+  /**
+   * Reset the shown frame to a live, looping animation.
+   *
+   * Called once `IDLE_RESUME_MS` has passed without timeline interaction, so
+   * a scrub or an explicit pause does not permanently strand the view away
+   * from "now".
+   */
+  private resumeLiveView(): void {
+    this.followingNow = true;
+
+    const frames = this.sliderFrames();
+    if (frames.length === 0) {
+      return;
+    }
+
+    const nowIndex = this.resolveNowIndex(frames);
+    this.nowIndex.set(nowIndex);
+    void this.selectFrame(nowIndex);
+
+    if (!this.playing() && !(this.isMobile() && this.mobileTab() === 'chart')) {
+      this.startPlay();
+    }
+  }
+
+  private scheduleIdleResume(): void {
+    if (this.idleResumeTimerId !== null) {
+      clearTimeout(this.idleResumeTimerId);
+    }
+    this.idleResumeTimerId = setTimeout(() => {
+      this.idleResumeTimerId = null;
+      this.resumeLiveView();
+    }, IDLE_RESUME_MS);
   }
 
   private startPlay(): void {
@@ -319,7 +393,7 @@ export class Home implements OnInit {
     }
 
     if (this.selectedIndex() >= timelineFrames.length - 1) {
-      void this.selectFrame(this.playbackLoopIndex());
+      void this.selectFrame(this.followingNow ? this.nowIndex() : 0);
     }
 
     this.playing.set(true);
@@ -330,8 +404,10 @@ export class Home implements OnInit {
     const timelineFrames = this.sliderFrames();
     const nextIndex = this.selectedIndex() + 1;
     if (nextIndex >= timelineFrames.length) {
-      if (this.isMobile()) {
-        void this.selectFrame(this.playbackLoopIndex());
+      // Following "now" is the resting state, so it loops back and keeps
+      // playing; a manually started playthrough just stops at the end.
+      if (this.followingNow) {
+        void this.selectFrame(this.nowIndex());
         return;
       }
       this.stopPlay();
@@ -339,13 +415,6 @@ export class Home implements OnInit {
     }
 
     void this.selectFrame(nextIndex);
-  }
-
-  private playbackLoopIndex(): number {
-    if (this.isMobile()) {
-      return this.nowIndex();
-    }
-    return 0;
   }
 
   private stopPlay(): void {
@@ -361,37 +430,144 @@ export class Home implements OnInit {
     this.timelineError.set(null);
 
     try {
-      const timeline = await new Promise<ProbabilityTimelineResponse>((resolve, reject) => {
-        this.radarService.getProbabilityTimeline().subscribe({
-          next: resolve,
-          error: reject,
-        });
-      });
-
-      this.ensembleAvailable.set(timeline.ensemble_available);
-      this.knmiEnsembleUnavailable.set(Boolean(timeline.knmi_ensemble_unavailable));
-      if (!timeline.ensemble_available) {
-        this.mode.set('intensity');
-      }
-      this.frames.set(timeline.frames);
-
-      if (timeline.frames.length === 0) {
-        this.timelineError.set('Nog geen radargegevens geïmporteerd.');
-        return;
-      }
-
-      const nowIndex = this.resolveNowIndex(this.sliderFrames());
-      this.nowIndex.set(nowIndex);
-      this.startNowIndexRefresh();
-      await this.selectFrame(nowIndex);
-      this.scheduleWindowWarmUp();
-      this.timelineReady = true;
-      this.maybeStartMobileAutoplay();
+      const timeline = await this.fetchProbabilityTimeline();
+      await this.applyTimeline(timeline, { isInitialLoad: true });
     } catch {
       this.timelineError.set('Kan radartijdlijn niet laden.');
     } finally {
       this.loading.set(false);
       requestAnimationFrame(() => this.schedulePaneResize());
+    }
+  }
+
+  /**
+   * Manually re-check for new data, for the refresh button.
+   *
+   * A no-op fetch (nothing new since the last successful load) intentionally
+   * leaves the view untouched; only a genuine failure is surfaced, and only
+   * briefly, since the timeline already shown is still perfectly valid.
+   */
+  async manualRefresh(): Promise<void> {
+    if (this.timelineRequestInFlight) {
+      return;
+    }
+
+    if (this.refreshErrorTimeoutId !== null) {
+      clearTimeout(this.refreshErrorTimeoutId);
+      this.refreshErrorTimeoutId = null;
+    }
+    this.refreshError.set(null);
+    this.refreshing.set(true);
+    this.timelineRequestInFlight = true;
+
+    try {
+      const timeline = await this.fetchProbabilityTimeline();
+      if (timeline.generated_at !== this.lastGeneratedAt) {
+        await this.applyTimeline(timeline, { isInitialLoad: false });
+      }
+    } catch {
+      this.refreshError.set('Kan niet vernieuwen.');
+      this.refreshErrorTimeoutId = setTimeout(() => {
+        this.refreshError.set(null);
+        this.refreshErrorTimeoutId = null;
+      }, REFRESH_ERROR_DISPLAY_MS);
+    } finally {
+      this.timelineRequestInFlight = false;
+      this.refreshing.set(false);
+    }
+  }
+
+  private fetchProbabilityTimeline(): Promise<ProbabilityTimelineResponse> {
+    return new Promise((resolve, reject) => {
+      this.radarService.getProbabilityTimeline().subscribe({
+        next: resolve,
+        error: reject,
+      });
+    });
+  }
+
+  /**
+   * Background check for newer data, on `TIMELINE_POLL_INTERVAL_MS`.
+   *
+   * Skipped while a scrub is being debounced so it never fights an in-flight
+   * drag; silently retried on the next tick on failure, since this runs
+   * unattended and a transient network blip is not worth surfacing.
+   */
+  private async pollTimeline(): Promise<void> {
+    if (this.timelineRequestInFlight || this.scrubTimerId !== null) {
+      return;
+    }
+
+    this.timelineRequestInFlight = true;
+    try {
+      const timeline = await this.fetchProbabilityTimeline();
+      if (timeline.generated_at === this.lastGeneratedAt) {
+        return;
+      }
+      await this.applyTimeline(timeline, { isInitialLoad: false });
+    } catch {
+      // Keep showing the current data; the next tick will try again.
+    } finally {
+      this.timelineRequestInFlight = false;
+    }
+  }
+
+  private startPolling(): void {
+    if (this.pollIntervalId !== null) {
+      return;
+    }
+
+    this.pollIntervalId = setInterval(() => void this.pollTimeline(), TIMELINE_POLL_INTERVAL_MS);
+    this.destroyRef.onDestroy(() => {
+      if (this.pollIntervalId !== null) {
+        clearInterval(this.pollIntervalId);
+      }
+    });
+  }
+
+  /**
+   * Apply a fetched timeline, for both the initial load and later refreshes.
+   *
+   * When still `followingNow`, the shown frame jumps to the new "now" so a
+   * left-open tab keeps showing live data; otherwise the user's selected
+   * point in time is preserved by `valid_at` even though the window shifted.
+   */
+  private async applyTimeline(
+    timeline: ProbabilityTimelineResponse,
+    options: { isInitialLoad: boolean },
+  ): Promise<void> {
+    this.lastGeneratedAt = timeline.generated_at;
+    this.ensembleAvailable.set(timeline.ensemble_available);
+    this.knmiEnsembleUnavailable.set(Boolean(timeline.knmi_ensemble_unavailable));
+    if (!timeline.ensemble_available && options.isInitialLoad) {
+      this.mode.set('intensity');
+    }
+
+    const previousValidAt = this.sliderFrames()[this.selectedIndex()]?.valid_at ?? null;
+    this.frames.set(timeline.frames);
+
+    if (timeline.frames.length === 0) {
+      this.timelineError.set('Nog geen radargegevens geïmporteerd.');
+      return;
+    }
+    this.timelineError.set(null);
+
+    const nextFrames = this.sliderFrames();
+    const nowIndex = this.resolveNowIndex(nextFrames);
+    this.nowIndex.set(nowIndex);
+
+    const targetIndex =
+      options.isInitialLoad || this.followingNow
+        ? nowIndex
+        : indexForValidAt(nextFrames, previousValidAt);
+    await this.selectFrame(targetIndex);
+    this.scheduleWindowWarmUp();
+
+    if (options.isInitialLoad) {
+      this.startNowIndexRefresh();
+      this.startPolling();
+      this.timelineReady = true;
+      this.maybeStartAutoplay();
     }
   }
 
