@@ -2,10 +2,11 @@
 <html lang="nl">
   <head>
     <meta charset="utf-8" />
-    <title>RegenKans</title>
+    <title>Regenkans – regenradar met kans op regen</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="canonical" href="https://regenkans.nl/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -16,16 +17,17 @@
 
     <meta
       name="description"
-      content="Regenkans is een regenradar voor Nederland dat niet alleen laat zien waar het regent, maar ook hoe zeker die voorspelling is."
+      content="Regenradar voor Nederland met de kans op regen, op basis van KNMI-data. Zie waar het regent, hoe hard en hoe zeker het is. Zonder reclame of account."
     />
 
     <!-- Open Graph (used by WhatsApp, Facebook, LinkedIn, Telegram, etc.) -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://regenkans.nl/" />
-    <meta property="og:title" content="RegenKans" />
+    <meta property="og:site_name" content="Regenkans" />
+    <meta property="og:title" content="Regenkans – regenradar met kans op regen" />
     <meta
       property="og:description"
-      content="Regenkans is een regenradar voor Nederland dat niet alleen laat zien waar het regent, maar ook hoe zeker die voorspelling is."
+      content="Regenradar voor Nederland met de kans op regen, op basis van KNMI-data. Zie waar het regent, hoe hard en hoe zeker het is. Zonder reclame of account."
     />
     <meta property="og:image" content="https://regenkans.nl/og.png" />
     <meta property="og:image:width" content="1418" />
@@ -34,14 +36,35 @@
 
     <!-- Twitter/X Card -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="RegenKans" />
+    <meta name="twitter:title" content="Regenkans – regenradar met kans op regen" />
     <meta
       name="twitter:description"
-      content="Regenkans is een regenradar voor Nederland dat niet alleen laat zien waar het regent, maar ook hoe zeker die voorspelling is."
+      content="Regenradar voor Nederland met de kans op regen, op basis van KNMI-data. Zie waar het regent, hoe hard en hoe zeker het is. Zonder reclame of account."
     />
     <meta name="twitter:image" content="https://regenkans.nl/og.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Regenkans",
+        "url": "https://regenkans.nl/",
+        "applicationCategory": "WeatherApplication",
+        "operatingSystem": "Web",
+        "inLanguage": "nl-NL",
+        "description": "Regenradar voor Nederland die laat zien waar het regent, hoe hard, en hoe groot de kans op regen is. Gebaseerd op open data van het KNMI.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" }
+      }
+    </script>
   </head>
   <body>
     <app-root></app-root>
+    <noscript>
+      <h1>Regenkans – regenradar voor Nederland</h1>
+      <p>
+        Regenkans laat op een kaart zien waar het regent, hoe hard, en hoe groot de kans op regen
+        is. De data komt van het KNMI. Zet JavaScript aan om de kaart te gebruiken.
+      </p>
+    </noscript>
   </body>
 </html>

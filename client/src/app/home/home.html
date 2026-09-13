@@ -1,4 +1,5 @@
 <div class="map-layout" [class.map-layout--mobile]="isMobile()">
+  <h1 class="visually-hidden">Regenradar Nederland met kans op regen</h1>
   @if (isMobile()) {
     <nav class="mobile-tabs" role="tablist" aria-label="Kaart of grafiek">
       <button
@@ -27,10 +28,7 @@
   }
 
   <div class="pane-stack">
-    <div
-      class="map-pane"
-      [class.map-pane--hidden]="isMobile() && mobileTab() === 'chart'"
-    >
+    <div class="map-pane" [class.map-pane--hidden]="isMobile() && mobileTab() === 'chart'">
       <div class="map-stage">
         <app-radar-map
           #radarMap
@@ -79,11 +77,7 @@
             <p class="chart-empty__text">Locatie ophalen…</p>
           } @else if (geolocationError()) {
             <p class="chart-empty__text">{{ geolocationError() }}</p>
-            <button
-              type="button"
-              class="chart-empty__button"
-              (click)="onMobileTabChange('map')"
-            >
+            <button type="button" class="chart-empty__button" (click)="onMobileTabChange('map')">
               Naar de kaart
             </button>
           }

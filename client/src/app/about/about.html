@@ -4,19 +4,34 @@
   <h1>Over Regenkans</h1>
 
   <p>
-    Regenkans is een regenradar voor Nederland. Zoals andere radar-apps laat het zien waar het
-    nu regent en hoe hard. Het verschil zit in de kansweergave. In plaats van één voorspelling
-    laat Regenkans zien hoe zeker die voorspelling is.
+    Regenkans is een regenradar voor Nederland: waar het nu regent, hoe hard, en wat er de komende
+    uren wordt verwacht.
+  </p>
+
+  <h2>Alternatief voor Buienradar</h2>
+  <p>
+    Buienradar geeft één antwoord: om 15:20 begint het. Regenkans rekent met 20 voorspellingen
+    tegelijk en laat zien hoeveel die het met elkaar eens zijn. Wijzen ze dezelfde kant op, dan weet
+    je het vrij zeker. Lopen ze uiteen, dan zie je dat ook, in plaats van een tijdstip dat stelliger
+    is dan de data toelaat.
+  </p>
+  <p>
+    Verder is Regenkans klein: geen reclame, geen cookiebanner, geen account. Het vervangt geen
+    complete weer-app, er is geen temperatuur, wind of meerdaagse verwachting, alleen neerslag.
   </p>
 
   <h2>Wat laat de kaart zien</h2>
-  <p>
-    Je kunt schakelen tussen drie weergaves:
-  </p>
+  <p>Je kunt schakelen tussen drie weergaves:</p>
   <ul>
-    <li><strong>Radar:</strong> de gemeten regenintensiteit nu, plus een korte voorspelling voor de eerstkomende tijd.</li>
+    <li>
+      <strong>Radar:</strong> de gemeten regenintensiteit nu, plus een korte voorspelling voor de
+      eerstkomende tijd.
+    </li>
     <li><strong>Kans:</strong> de kans op regen, in procent.</li>
-    <li><strong>Gemiddelde:</strong> de verwachte regenintensiteit, gemiddeld over alle voorspellingen.</li>
+    <li>
+      <strong>Gemiddelde:</strong> de verwachte regenintensiteit, gemiddeld over alle
+      voorspellingen.
+    </li>
   </ul>
 
   <h2>Data</h2>
@@ -25,29 +40,20 @@
   </p>
   <ul>
     <li>Radarbeelden met een korte-termijnvoorspelling (nowcast), voor de radarweergave.</li>
-    <li>
-      Een ensemblevoorspelling: een set van meerdere voorspellingen die elk net andere aannames
-      gebruiken. Door deze voorspellingen samen te bekijken, ontstaat een beeld van hoe zeker de
-      regen is.
-    </li>
+    <li>Een ensemblevoorspelling: een set voorspellingen die elk net andere aannames gebruiken.</li>
   </ul>
 
   <h2>Hoe de kans wordt berekend</h2>
   <p>
-    Een ensemblevoorspelling bestaat uit meerdere varianten van dezelfde voorspelling. Zeggen de
-    meeste varianten dat het gaat regenen op een plek, dan is de kans op regen daar hoog. Zijn de
-    varianten het oneens, dan is de kans lager en de voorspelling onzekerder.
-  </p>
-  <p>
-    Zo geeft Regenkans niet alleen antwoord op de vraag "gaat het regenen?", maar ook op de vraag
-    "hoe zeker weten we dat?".
+    Elke variant voorspelt per plek en per moment hoeveel neerslag er valt. De kans is het aandeel
+    varianten dat boven 0,1 mm per uur uitkomt. Zeggen 15 van de 20 varianten dat het regent, dan
+    staat er 75%.
   </p>
 
   <h2>Techniek</h2>
   <p>
     De data wordt automatisch opgehaald bij het KNMI, verwerkt en opgeslagen. De kaart toont de
-    resultaten op een interactieve kaart met een tijdlijn, zodat je door de tijd heen kunt
-    bewegen.
+    resultaten op een interactieve kaart met een tijdlijn, zodat je door de tijd heen kunt bewegen.
   </p>
 
   <h2>Contact</h2>
