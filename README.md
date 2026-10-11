@@ -134,10 +134,10 @@ crontab -e
 ```
 */5 * * * * /home/bart/regenkans/scripts/ingest_radar.sh >> /home/bart/regenkans/log/radar_ingest.log 2>&1
 */6 * * * * /home/bart/regenkans/scripts/ingest_ensemble.sh >> /home/bart/regenkans/log/ensemble_ingest.log 2>&1
-0 3 * * * /home/bart/regenkans/scripts/cleanup_ensemble.sh >> /home/bart/regenkans/log/ensemble_cleanup.log 2>&1
+30 * * * * /home/bart/regenkans/scripts/cleanup_ensemble.sh >> /home/bart/regenkans/log/ensemble_cleanup.log 2>&1
 ```
 
-The cleanup job deletes radar and ensemble forecast records, their downloaded source files and their rendered frames older than 1 day (only the latest ensemble forecast is ever served, and the map only reaches four hours back, so older ones are pure disk usage). It always keeps the most recently issued forecast of each kind, even if ingestion has stalled. The frames are the bulk of what it reclaims: ingestion renders every frame the slider can show, which is around a gigabyte a day.
+The cleanup job runs every hour. It deletes radar and ensemble forecast records, their downloaded source files and their rendered frames older than 1 day (only the latest ensemble forecast is ever served, and the map only reaches four hours back, so older ones are pure disk usage). It always keeps the most recently issued forecast of each kind, even if ingestion has stalled. Ensemble NetCDF files are on the order of 100–200 MB, so a day of ingest is tens of gigabytes; hourly cleanup keeps a second day from stacking up on disk.
 
 Log output goes to the project's own `log/` directory (already writable by the deploy user), not `/var/log`.
 

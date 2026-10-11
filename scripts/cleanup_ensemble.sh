@@ -4,10 +4,11 @@
 # and their rendered frames older than 1 day, always keeping the most recently
 # issued forecast of each kind.
 #
-# Ingestion renders every frame the slider can show, so the frames are the bulk
-# of what this reclaims -- around a gigabyte a day.
+# Ensemble NetCDF files are large (on the order of 100–200 MB), so a day of
+# five-minute ingest is tens of gigabytes. Run hourly so files past the 1-day
+# cutoff do not pile up until the next night.
 #
-# Schedule with cron: 0 3 * * * /path/to/scripts/cleanup_ensemble.sh >> /path/to/log/ensemble_cleanup.log 2>&1
+# Schedule with cron: 30 * * * * /path/to/scripts/cleanup_ensemble.sh >> /path/to/log/ensemble_cleanup.log 2>&1
 # Overlapping cron invocations are skipped via flock.
 
 set -euo pipefail
