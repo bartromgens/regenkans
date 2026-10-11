@@ -1,5 +1,6 @@
 import {
   Component,
+  computed,
   DestroyRef,
   ElementRef,
   OnDestroy,
@@ -22,6 +23,12 @@ import {
 } from 'chart.js';
 import annotationPlugin from 'chartjs-plugin-annotation';
 import { PointSeriesPoint } from '../../radar/radar.service';
+import { formatAmsterdamTime } from '../../shared/format-time';
+import {
+  SegmentedControl,
+  SegmentedOption,
+} from '../../shared/segmented-control/segmented-control';
+import { injectTickingClock } from '../../shared/ticking-clock';
 import {
   RAIN_INTENSITY_SCALE_ID,
   RainIntensityScale,
@@ -73,8 +80,11 @@ const SPREAD_P25_LABEL = '__spread_p25';
 const SPREAD_BAND_LABEL = 'Spreiding (P25-P75)';
 const SPREAD_FILL_COLOR = 'rgba(5, 150, 105, 0.18)';
 
+type ChartWindowSegment = 'default' | 'extended';
+
 @Component({
   selector: 'app-rain-chart',
+  imports: [SegmentedControl],
   styleUrl: './rain-chart.scss',
   templateUrl: './rain-chart.html',
 })
@@ -82,7 +92,7 @@ export class RainChart implements OnDestroy {
   private readonly destroyRef = inject(DestroyRef);
   private readonly hostElement = inject(ElementRef<HTMLElement>);
   private readonly chartCanvas = viewChild<ElementRef<HTMLCanvasElement>>('chartCanvas');
-  private readonly clockMs = signal(Date.now());
+  private readonly clockMs = injectTickingClock(30_000);
 
   readonly series = input<PointSeriesPoint[]>([]);
   readonly selectedValidAt = input<string | null>(null);
@@ -100,12 +110,29 @@ export class RainChart implements OnDestroy {
 
   readonly showSpread = signal(true);
 
+  readonly chartWindowSegment = computed((): ChartWindowSegment =>
+    this.extendedWindow() ? 'extended' : 'default',
+  );
+
+  readonly chartWindowOptions = computed((): SegmentedOption<ChartWindowSegment>[] | null => {
+    const hours = this.maxAvailableHours();
+    if (hours === null) {
+      return null;
+    }
+    return [
+      { value: 'default', label: `${this.defaultWindowHours}u` },
+      {
+        value: 'extended',
+        label: `${hours}u`,
+        disabled: this.extending(),
+        busy: this.extending(),
+      },
+    ];
+  });
+
   private chart: Chart | null = null;
 
   constructor() {
-    const intervalId = window.setInterval(() => this.clockMs.set(Date.now()), 30_000);
-    this.destroyRef.onDestroy(() => window.clearInterval(intervalId));
-
     afterRenderEffect(() => {
       this.series();
       this.selectedValidAt();
@@ -160,6 +187,10 @@ export class RainChart implements OnDestroy {
       return;
     }
     this.windowChange.emit(extended);
+  }
+
+  onChartWindowChange(segment: ChartWindowSegment): void {
+    this.setWindow(segment === 'extended');
   }
 
   toggleSpread(): void {
@@ -274,7 +305,7 @@ export class RainChart implements OnDestroy {
                 if (timeMs == null) {
                   return '';
                 }
-                return formatChartTime(timeMs, {
+                return formatAmsterdamTime(timeMs, {
                   weekday: 'short',
                   day: 'numeric',
                   month: 'short',
@@ -321,7 +352,7 @@ export class RainChart implements OnDestroy {
               maxRotation: 0,
               autoSkip: true,
               maxTicksLimit: 7,
-              callback: (value) => formatChartTime(Number(value), {
+              callback: (value) => formatAmsterdamTime(Number(value), {
                 hour: '2-digit',
                 minute: '2-digit',
               }),
@@ -433,16 +464,6 @@ function buildSpreadDatasets(
       order: 1,
     },
   ];
-}
-
-function formatChartTime(
-  timeMs: number,
-  options: Intl.DateTimeFormatOptions,
-): string {
-  return new Intl.DateTimeFormat('nl-NL', {
-    timeZone: 'Europe/Amsterdam',
-    ...options,
-  }).format(new Date(timeMs));
 }
 
 function buildIntensityBands() {
@@ -589,7 +610,7 @@ function buildAnnotations(
               xScaleID: 'x',
               yValue: (ctx: { chart: Chart }) => ctx.chart.scales['y']?.max ?? 0,
               yScaleID: 'y',
-              content: formatChartTime(selectedMs, {
+              content: formatAmsterdamTime(selectedMs, {
                 hour: '2-digit',
                 minute: '2-digit',
               }),

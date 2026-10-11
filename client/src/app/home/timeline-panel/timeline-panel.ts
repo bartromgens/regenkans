@@ -14,6 +14,8 @@ import {
 import { MatSliderModule } from '@angular/material/slider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TimelineSlot } from '../../radar/radar.service';
+import { formatAmsterdamTime } from '../../shared/format-time';
+import { injectTickingClock } from '../../shared/ticking-clock';
 
 interface NowMark {
   edge: 'start' | 'end' | 'middle';
@@ -37,7 +39,7 @@ const SLIDER_TRACK_INSET_PX = 3;
 export class TimelinePanel {
   private readonly destroyRef = inject(DestroyRef);
   private readonly sliderWrap = viewChild<ElementRef<HTMLElement>>('sliderWrap');
-  private readonly clockMs = signal(Date.now());
+  private readonly clockMs = injectTickingClock(30_000);
   private readonly track = signal<SliderTrack | null>(null);
   private resizeObserver: ResizeObserver | null = null;
   private observedSlider: HTMLElement | null = null;
@@ -63,9 +65,7 @@ export class TimelinePanel {
       untracked(() => this.bindSliderTrack());
     });
 
-    const intervalId = window.setInterval(() => this.clockMs.set(Date.now()), 30_000);
     this.destroyRef.onDestroy(() => {
-      window.clearInterval(intervalId);
       this.resizeObserver?.disconnect();
     });
   }
@@ -101,11 +101,10 @@ export class TimelinePanel {
       return '';
     }
 
-    return new Intl.DateTimeFormat('nl-NL', {
-      timeZone: 'Europe/Amsterdam',
+    return formatAmsterdamTime(frame.valid_at, {
       hour: '2-digit',
       minute: '2-digit',
-    }).format(new Date(frame.valid_at));
+    });
   };
 
   onSliderInput(index: number): void {

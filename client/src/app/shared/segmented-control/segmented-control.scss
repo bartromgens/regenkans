@@ -1,0 +1,55 @@
+.segmented-control {
+  display: inline-flex;
+  gap: 0.25rem;
+  padding: 0.15rem;
+  border-radius: 999px;
+  background: rgba(226, 232, 240, 0.94);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.segmented-control--compact {
+  gap: 0.15rem;
+  padding: 0.1rem;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.segmented-control__button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.25rem 0.65rem;
+  background: transparent;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.segmented-control--compact .segmented-control__button {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.62rem;
+}
+
+.segmented-control__button--active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.segmented-control__button:disabled,
+.segmented-control__button--busy {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.segmented-control__button--busy {
+  cursor: wait;
+}
+
+@media (max-width: 640px) {
+  .segmented-control__button {
+    padding: 0.2rem 0.5rem;
+    font-size: 0.68rem;
+  }
+}

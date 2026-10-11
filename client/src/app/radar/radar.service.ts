@@ -5,6 +5,10 @@ import { Observable } from 'rxjs';
 export type FrameKind = 'observed' | 'forecast';
 export type OverlayMode = 'intensity' | 'probability' | 'expected';
 
+export function requiresEnsemble(mode: OverlayMode): boolean {
+  return mode === 'probability' || mode === 'expected';
+}
+
 export interface FrameSource {
   issued_at: string;
   lead_minutes: number;

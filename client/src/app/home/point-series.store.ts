@@ -1,5 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { PointSeriesPoint, PointSeriesResponse, RadarService } from '../radar/radar.service';
+import { createLatestRequestGuard } from '../shared/request-guard';
 import { MapLocation } from './radar-map/radar-map';
 import { CHART_WINDOW_AFTER_HOURS, CHART_WINDOW_BEFORE_HOURS } from './rain-chart/rain-chart';
 import { TimelineStore } from './timeline.store';
@@ -16,7 +18,7 @@ const HOUR_MS = 60 * 60 * 1000;
 export class PointSeriesStore {
   private readonly radarService = inject(RadarService);
   private readonly timeline = inject(TimelineStore);
-  private loadToken = 0;
+  private readonly loadGuard = createLatestRequestGuard();
 
   readonly location = signal<MapLocation | null>(null);
   readonly locationLabel = signal('');
@@ -65,7 +67,7 @@ export class PointSeriesStore {
   }
 
   clear(): void {
-    this.loadToken += 1;
+    this.loadGuard.next();
     this.location.set(null);
     this.points.set([]);
     this.error.set(null);
@@ -100,7 +102,7 @@ export class PointSeriesStore {
   }
 
   private async load(location: MapLocation): Promise<void> {
-    const token = ++this.loadToken;
+    const token = this.loadGuard.next();
     this.loading.set(true);
     this.error.set(null);
     this.points.set([]);
@@ -108,31 +110,31 @@ export class PointSeriesStore {
     try {
       const response = await this.fetchPointSeries(location, CHART_WINDOW_AFTER_HOURS);
 
-      if (token !== this.loadToken) {
+      if (!this.loadGuard.isCurrent(token)) {
         return;
       }
 
       this.points.set(response.points);
     } catch {
-      if (token === this.loadToken) {
+      if (this.loadGuard.isCurrent(token)) {
         this.error.set('Kan regenreeks voor deze locatie niet laden.');
       }
     } finally {
-      if (token === this.loadToken) {
+      if (this.loadGuard.isCurrent(token)) {
         this.loading.set(false);
       }
     }
   }
 
   private async loadExtended(location: MapLocation): Promise<void> {
-    const token = ++this.loadToken;
+    const token = this.loadGuard.next();
     this.extending.set(true);
     this.error.set(null);
 
     try {
       const response = await this.fetchPointSeries(location);
 
-      if (token !== this.loadToken) {
+      if (!this.loadGuard.isCurrent(token)) {
         return;
       }
 
@@ -141,7 +143,7 @@ export class PointSeriesStore {
     } catch {
       // Keep the short series visible; the user can retry the extended toggle.
     } finally {
-      if (token === this.loadToken) {
+      if (this.loadGuard.isCurrent(token)) {
         this.extending.set(false);
       }
     }
@@ -151,14 +153,14 @@ export class PointSeriesStore {
     location: MapLocation,
     afterHours?: number,
   ): Promise<PointSeriesResponse> {
-    return new Promise((resolve, reject) => {
-      this.radarService
-        .getPointSeries(location.lat, location.lng, CHART_WINDOW_BEFORE_HOURS, afterHours)
-        .subscribe({
-          next: resolve,
-          error: reject,
-        });
-    });
+    return firstValueFrom(
+      this.radarService.getPointSeries(
+        location.lat,
+        location.lng,
+        CHART_WINDOW_BEFORE_HOURS,
+        afterHours,
+      ),
+    );
   }
 }
 

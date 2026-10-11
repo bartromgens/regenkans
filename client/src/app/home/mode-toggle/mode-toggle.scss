@@ -1,3 +1,5 @@
+@use '../../../styles/mixins' as mixins;
+
 .mode-toggle-overlay {
   position: absolute;
   top: 0.75rem;
@@ -19,37 +21,8 @@
   pointer-events: none;
 }
 
-.mode-toggle {
-  display: inline-flex;
-  gap: 0.25rem;
-  padding: 0.15rem;
-  border-radius: 999px;
-  background: rgba(226, 232, 240, 0.94);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(8px);
+.mode-toggle-row app-segmented-control {
   pointer-events: auto;
-}
-
-.mode-toggle__button {
-  border: 0;
-  border-radius: 999px;
-  padding: 0.25rem 0.65rem;
-  background: transparent;
-  color: #475569;
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.mode-toggle__button--active {
-  background: #ffffff;
-  color: #0f172a;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
-}
-
-.mode-toggle__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
 }
 
 .mode-toggle__info-button {
@@ -62,9 +35,7 @@
   padding: 0;
   border: 1px solid rgba(15, 23, 42, 0.1);
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(8px);
+  @include mixins.glass-panel($shadow: 0 4px 16px rgba(15, 23, 42, 0.12));
   color: #475569;
   cursor: pointer;
   pointer-events: auto;
@@ -92,8 +63,7 @@
   max-width: 22rem;
   padding: 0.5rem 0.65rem;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  @include mixins.glass-panel($shadow: 0 4px 16px rgba(15, 23, 42, 0.12));
   font-size: 0.7rem;
   line-height: 1.35;
   color: #334155;
@@ -121,10 +91,5 @@
   .mode-toggle-overlay {
     top: 0.5rem;
     max-width: calc(100% - 4rem);
-  }
-
-  .mode-toggle__button {
-    padding: 0.2rem 0.5rem;
-    font-size: 0.68rem;
   }
 }

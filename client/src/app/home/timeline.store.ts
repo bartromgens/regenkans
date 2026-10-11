@@ -1,10 +1,14 @@
 import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import {
   OverlayMode,
   ProbabilityTimelineResponse,
   RadarService,
+  requiresEnsemble,
   TimelineSlot,
 } from '../radar/radar.service';
+import { formatAmsterdamTime } from '../shared/format-time';
+import { injectTickingClock } from '../shared/ticking-clock';
 import { TrackingService } from '../tracking.service';
 import { sourceForMode } from './frame-source';
 import { LayoutStore } from './layout.store';
@@ -35,7 +39,7 @@ export class TimelineStore {
   private readonly overlayStore = inject(RadarOverlayStore);
   private timelineReady = false;
   private autoplayStarted = false;
-  private nowIndexIntervalId: ReturnType<typeof setInterval> | null = null;
+  private readonly clockMs = injectTickingClock(60_000);
   private pollIntervalId: ReturnType<typeof setInterval> | null = null;
   private refreshErrorTimeoutId: ReturnType<typeof setTimeout> | null = null;
   private idleResumeTimerId: ReturnType<typeof setTimeout> | null = null;
@@ -58,7 +62,14 @@ export class TimelineStore {
   readonly refreshError = signal<string | null>(null);
   readonly frames = signal<TimelineSlot[]>([]);
   readonly selectedIndex = signal(0);
-  readonly nowIndex = signal(0);
+  readonly nowIndex = computed(() => {
+    const frames = this.sliderFrames();
+    if (frames.length === 0) {
+      return 0;
+    }
+    const nowTime = this.clockMs();
+    return this.resolveNowIndex(frames, nowTime);
+  });
   readonly currentLabel = signal('');
   readonly mode = signal<OverlayMode>('probability');
   readonly ensembleAvailable = signal(false);
@@ -79,9 +90,6 @@ export class TimelineStore {
       }
       if (this.idleResumeTimerId !== null) {
         clearTimeout(this.idleResumeTimerId);
-      }
-      if (this.nowIndexIntervalId !== null) {
-        clearInterval(this.nowIndexIntervalId);
       }
       if (this.pollIntervalId !== null) {
         clearInterval(this.pollIntervalId);
@@ -157,7 +165,6 @@ export class TimelineStore {
     this.overlayStore.resetForModeChange();
 
     const nextFrames = this.sliderFrames();
-    this.nowIndex.set(this.resolveNowIndex(nextFrames));
     await this.selectFrame(indexForValidAt(nextFrames, currentValidAt));
     this.warmSliderWindow();
   }
@@ -238,7 +245,7 @@ export class TimelineStore {
   }
 
   private modeSelectable(mode: OverlayMode): boolean {
-    return mode === 'intensity' || this.ensembleAvailable();
+    return !requiresEnsemble(mode) || this.ensembleAvailable();
   }
 
   /**
@@ -276,8 +283,7 @@ export class TimelineStore {
       return;
     }
 
-    const nowIndex = this.resolveNowIndex(frames);
-    this.nowIndex.set(nowIndex);
+    const nowIndex = this.resolveNowIndex(frames, Date.now());
     void this.selectFrame(nowIndex);
 
     if (!this.playing() && this.layout.mapVisible()) {
@@ -327,12 +333,7 @@ export class TimelineStore {
   }
 
   private fetchProbabilityTimeline(): Promise<ProbabilityTimelineResponse> {
-    return new Promise((resolve, reject) => {
-      this.radarService.getProbabilityTimeline().subscribe({
-        next: resolve,
-        error: reject,
-      });
-    });
+    return firstValueFrom(this.radarService.getProbabilityTimeline());
   }
 
   /**
@@ -397,8 +398,7 @@ export class TimelineStore {
     this.timelineError.set(null);
 
     const nextFrames = this.sliderFrames();
-    const nowIndex = this.resolveNowIndex(nextFrames);
-    this.nowIndex.set(nowIndex);
+    const nowIndex = this.resolveNowIndex(nextFrames, Date.now());
 
     const targetIndex =
       options.isInitialLoad || this.followingNow
@@ -408,15 +408,13 @@ export class TimelineStore {
     this.warmSliderWindow();
 
     if (options.isInitialLoad) {
-      this.startNowIndexRefresh();
       this.startPolling();
       this.timelineReady = true;
       this.maybeStartAutoplay();
     }
   }
 
-  private resolveNowIndex(timelineFrames: TimelineSlot[]): number {
-    const nowTime = Date.now();
+  private resolveNowIndex(timelineFrames: TimelineSlot[], nowTime: number): number {
     let bestIndex = 0;
     let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -429,20 +427,6 @@ export class TimelineStore {
     });
 
     return bestIndex;
-  }
-
-  private startNowIndexRefresh(): void {
-    if (this.nowIndexIntervalId !== null) {
-      clearInterval(this.nowIndexIntervalId);
-    }
-
-    this.nowIndexIntervalId = setInterval(() => {
-      const frames = this.sliderFrames();
-      if (frames.length === 0) {
-        return;
-      }
-      this.nowIndex.set(this.resolveNowIndex(frames));
-    }, 60_000);
   }
 
   private async selectFrame(index: number): Promise<void> {
@@ -476,14 +460,13 @@ export class TimelineStore {
 }
 
 function formatValidAt(value: string): string {
-  return new Intl.DateTimeFormat('nl-NL', {
-    timeZone: 'Europe/Amsterdam',
+  return formatAmsterdamTime(value, {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-  }).format(new Date(value));
+  });
 }
 
 /** The frame at `validAt`, or the last one before it once the window shifts. */

@@ -1,3 +1,5 @@
+@use '../../../styles/mixins' as mixins;
+
 .map-legend {
   position: absolute;
   bottom: 5.75rem;
@@ -5,9 +7,7 @@
   z-index: 2;
   padding: 0.45rem 0.55rem;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.1);
-  backdrop-filter: blur(8px);
+  @include mixins.glass-panel-subtle;
   pointer-events: none;
 }
 

@@ -1,5 +1,6 @@
 import { DestroyRef, Injectable, inject, signal } from '@angular/core';
 import { OverlayMode, RadarService, TimelineSlot } from '../radar/radar.service';
+import { createLatestRequestGuard } from '../shared/request-guard';
 import { sourceForMode, unavailableMessage } from './frame-source';
 import { RadarOverlay } from './radar-map/radar-map';
 
@@ -20,7 +21,7 @@ const WARM_UP_FALLBACK_DELAY_MS = 1_000;
 export class RadarOverlayStore {
   private readonly radarService = inject(RadarService);
   private readonly destroyRef = inject(DestroyRef);
-  private loadToken = 0;
+  private readonly loadGuard = createLatestRequestGuard();
   private scrubTimerId: ReturnType<typeof setTimeout> | null = null;
   private pendingScrub: { frames: TimelineSlot[]; index: number; mode: OverlayMode } | null = null;
   private lastLoadAt = 0;
@@ -58,14 +59,14 @@ export class RadarOverlayStore {
       return;
     }
 
-    const token = ++this.loadToken;
+    const token = this.loadGuard.next();
     try {
       this.error.set(null);
       const canReuseBbox = this.sharedBbox !== null && this.sharedBboxImageUrl === source.image_url;
       const bbox = canReuseBbox
         ? this.sharedBbox!
         : (source.bbox ?? (await this.radarService.resolveBbox(source)));
-      if (token !== this.loadToken) {
+      if (!this.loadGuard.isCurrent(token)) {
         return;
       }
 
@@ -73,7 +74,7 @@ export class RadarOverlayStore {
       this.sharedBboxImageUrl = source.image_url;
       this.overlay.set({ imageUrl: source.image_url, bbox });
     } catch {
-      if (token === this.loadToken) {
+      if (this.loadGuard.isCurrent(token)) {
         this.error.set('Kan radarbeeld niet laden.');
       }
     }
