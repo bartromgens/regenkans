@@ -137,7 +137,7 @@ crontab -e
 30 * * * * /home/bart/regenkans/scripts/cleanup_ensemble.sh >> /home/bart/regenkans/log/ensemble_cleanup.log 2>&1
 ```
 
-The cleanup job runs every hour. It deletes radar and ensemble forecast records, their downloaded source files and their rendered frames older than 1 day (only the latest ensemble forecast is ever served, and the map only reaches four hours back, so older ones are pure disk usage). It always keeps the most recently issued forecast of each kind, even if ingestion has stalled. Ensemble NetCDF files are on the order of 100–200 MB, so a day of ingest is tens of gigabytes; hourly cleanup keeps a second day from stacking up on disk.
+The cleanup job runs every hour. Ensemble forecasts older than 2 hours are deleted, along with their NetCDF files and rendered frames. Radar forecasts are kept for 1 day, because the map shows four hours of past radar and those files are small. The newest forecast of each kind is always kept, even if ingestion has stalled. Ensemble files are a few hundred megabytes each, so two hours of them is a few gigabytes.
 
 Log output goes to the project's own `log/` directory (already writable by the deploy user), not `/var/log`.
 
